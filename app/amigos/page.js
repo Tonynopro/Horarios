@@ -19,6 +19,9 @@ import {
   ArrowRightLeft,
   Clock,
   Edit3,
+  Info,
+  Table as TableIcon,
+  FileType,
 } from "lucide-react";
 
 export default function AmigosPage() {
@@ -28,6 +31,7 @@ export default function AmigosPage() {
   const [amigoSeleccionado, setAmigoSeleccionado] = useState(null);
   const [idAmigoBase, setIdAmigoBase] = useState("yo");
   const [editandoAmigo, setEditandoAmigo] = useState(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   const sectionSubidaRef = useRef(null);
 
@@ -38,7 +42,7 @@ export default function AmigosPage() {
   const miHorario = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first()
   );
-  const perfil = useLiveQuery(() => db.perfil.toCollection().first()); // Obtenemos tu perfil
+  const perfil = useLiveQuery(() => db.perfil.toCollection().first());
 
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
   const bloquesTec = [
@@ -206,7 +210,7 @@ export default function AmigosPage() {
         }
         e.target.value = "";
       } catch (err) {
-        alert("Error: " + err.message);
+        alert("Error: Revisa el formato en el botón de info (i).");
       }
     };
     reader.readAsText(file);
@@ -221,11 +225,8 @@ export default function AmigosPage() {
     });
   };
 
-  // --- LÓGICA DE LISTA DE RESULTADOS ACTUALIZADA ---
   const listaResultados = (() => {
     let base = amigos ? [...amigos] : [];
-
-    // Si la base de comparación NO eres tú, inyectamos tu perfil real en la lista de tarjetas
     if (idAmigoBase !== "yo" && miHorario) {
       const miNombreReal = perfil?.nombre || "Usuario";
       base.push({
@@ -234,7 +235,6 @@ export default function AmigosPage() {
         id: "yo_temp",
       });
     }
-
     return base.filter((item) => {
       if (
         item.id === idAmigoBase ||
@@ -251,7 +251,15 @@ export default function AmigosPage() {
   })();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in">
+    <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in relative">
+      {/* BOTÓN INFO FLOTANTE */}
+      <button
+        onClick={() => setShowInfoModal(true)}
+        className="fixed bottom-24 right-8 z-50 p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 transition-all active:scale-95"
+      >
+        <Info size={24} />
+      </button>
+
       <header className="flex flex-col md:flex-row justify-between items-end gap-4">
         <h1 className="text-5xl font-black italic tracking-tighter text-tec-blue uppercase text-white">
           Network
@@ -443,6 +451,7 @@ export default function AmigosPage() {
         })}
       </div>
 
+      {/* GESTIÓN DE PERFILES */}
       <section className="pt-20 border-t border-white/5 space-y-6 text-center">
         <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
           Gestión de Perfiles
@@ -482,6 +491,122 @@ export default function AmigosPage() {
         </div>
       </section>
 
+      {/* MODAL DE INFO CSV (MISMO QUE EN CONFIG) */}
+      {showInfoModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in duration-300">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowInfoModal(false)}
+          />
+          <div className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3 text-tec-blue">
+                <Info size={28} />
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">
+                  Guía de Formato
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="p-3 bg-white/5 rounded-full hover:rotate-90 transition-all text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
+                  <TableIcon size={14} /> Vista Excel (Lunes a Viernes)
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
+                  <table className="w-full text-left text-[9px] font-bold min-w-[700px]">
+                    <thead className="bg-tec-blue/10 text-tec-blue uppercase text-center">
+                      <tr>
+                        <th className="p-3 border-r border-white/5">Hora</th>
+                        <th className="p-3 border-r border-white/5">Lunes</th>
+                        <th className="p-3 border-r border-white/5">Martes</th>
+                        <th className="p-3 border-r border-white/5">
+                          Miércoles
+                        </th>
+                        <th className="p-3 border-r border-white/5">Jueves</th>
+                        <th className="p-3">Viernes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-300">
+                      <tr>
+                        <td className="p-3 border-b border-white/5 bg-white/5 italic text-center font-mono whitespace-nowrap">
+                          08:00 - 09:00
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          IA (LCA)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          IA (LCA)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          IA (LCA)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          IA (LCA)
+                        </td>
+                        <td className="p-3 border-b border-white/5 text-center text-gray-700">
+                          ---
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 border-b border-white/5 bg-white/5 italic text-center font-mono whitespace-nowrap">
+                          10:00 - 11:00
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          Prog. Web (FF1)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          Prog. Web (LSO)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          Prog. Web (FF1)
+                        </td>
+                        <td className="p-3 border-b border-r border-white/5">
+                          Prog. Web (LSO)
+                        </td>
+                        <td className="p-3 border-b border-white/5">
+                          Prog. Web (LR)
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
+                  * Formato: <span className="text-white">Materia (Salón)</span>
+                  . El salón debe ir al final entre paréntesis para que el
+                  Network lo reconozca.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
+                  <FileType size={14} /> Estructura del Archivo (CSV)
+                </div>
+                <div className="bg-black/40 p-5 rounded-2xl border border-white/5 font-mono text-[10px] text-tec-blue leading-relaxed shadow-inner overflow-x-auto">
+                  <span className="text-gray-500">
+                    Hora,Lunes,Martes,Miércoles,Jueves,Viernes
+                  </span>
+                  <br />
+                  08:00 - 09:00,Inteligencia Artificial (LCA),Inteligencia
+                  Artificial (LCA),Inteligencia Artificial (LCA),Inteligencia
+                  Artificial (LCA), <br />
+                  10:00 - 11:00,Programación Web (FF1),Programación Web
+                  (LSO),Programación Web (FF1),Programación Web
+                  (LSO),Programación Web (LR)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL HORARIO */}
       {amigoSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
