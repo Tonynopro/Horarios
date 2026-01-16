@@ -8,6 +8,14 @@ export const metadata = {
   themeColor: "#00529b",
 };
 
+// Agrega este nuevo export debajo
+export const viewport = {
+  themeColor: "#00529b",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
