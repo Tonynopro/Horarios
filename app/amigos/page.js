@@ -2,26 +2,25 @@
 import { useState, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
-import { transformarCSV, obtenerClaseActual } from "@/lib/parser";
+import { transformarCSV } from "@/lib/parser";
 import HorarioGrid from "@/components/HorarioGrid";
+import EditorHorarioManual from "@/components/EditorHorarioManual";
 import {
-  UserPlus,
   FileUp,
-  Coffee,
-  Trash2,
   Users,
   Search,
-  Zap,
-  DoorOpen,
   X,
-  Calendar,
   BookOpen,
-  ArrowRightLeft,
   Clock,
   Edit3,
+  Trash2,
   Info,
   Table as TableIcon,
   FileType,
+  Keyboard,
+  Coffee,
+  DoorOpen,
+  ArrowRightLeft,
 } from "lucide-react";
 
 export default function AmigosPage() {
@@ -32,6 +31,7 @@ export default function AmigosPage() {
   const [idAmigoBase, setIdAmigoBase] = useState("yo");
   const [editandoAmigo, setEditandoAmigo] = useState(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showManual, setShowManual] = useState(false);
 
   const sectionSubidaRef = useRef(null);
 
@@ -44,25 +44,68 @@ export default function AmigosPage() {
   );
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
 
-  const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
   const bloquesTec = [
-    "07:00 - 08:00",
-    "08:00 - 09:00",
-    "09:00 - 10:00",
-    "10:00 - 11:00",
-    "11:00 - 12:00",
-    "12:00 - 13:00",
-    "13:00 - 14:00",
-    "14:00 - 15:00",
-    "15:00 - 16:00",
-    "16:00 - 17:00",
-    "17:00 - 18:00",
-    "18:00 - 19:00",
-    "19:00 - 20:00",
-    "20:00 - 21:00",
-    "21:00 - 22:00",
+    "07:00-08:00",
+    "08:00-09:00",
+    "09:00-10:00",
+    "10:00-11:00",
+    "11:00-12:00",
+    "12:00-13:00",
+    "13:00-14:00",
+    "14:00-15:00",
+    "15:00-16:00",
+    "16:00-17:00",
+    "17:00-18:00",
+    "18:00-19:00",
+    "19:00-20:00",
+    "20:00-21:00",
+    "21:00-22:00",
   ];
+  const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
 
+  // --- LÓGICA DE GUARDADO ---
+  const guardarDesdeEditor = async (data) => {
+    if (editandoAmigo) {
+      await db.horarios.update(editandoAmigo.id, {
+        nombreUsuario: data.nombreUsuario,
+        materias: data.materias,
+      });
+      setEditandoAmigo(null);
+    } else {
+      await db.horarios.add({
+        ...data,
+        esPrincipal: "false",
+        id: `amigo_${Date.now()}`,
+      });
+    }
+    setShowManual(false);
+    setNombre("");
+    alert("Guardado correctamente");
+  };
+
+  const manejarSubidaCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !nombre) return alert("Ingresa el nombre antes de subir.");
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const datos = transformarCSV(event.target.result, nombre);
+        await db.horarios.add({
+          nombreUsuario: nombre,
+          materias: datos.materias,
+          esPrincipal: "false",
+          id: `amigo_${Date.now()}`,
+        });
+        setNombre("");
+        alert("Amigo añadido.");
+      } catch (err) {
+        alert("Error de formato.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // --- LÓGICA DE FILTROS INTELIGENTE ---
   const obtenerDetalleFiltro = (amigo) => {
     const horarioBase =
       idAmigoBase === "yo"
@@ -72,106 +115,108 @@ export default function AmigosPage() {
     const coincidenciasCompactas = [];
     const norm = (r) => r.replace(/\s/g, "");
 
+    const getLimites = (mats, dia) => {
+      const diaMats = mats.filter((m) => m.dia === dia);
+      if (diaMats.length === 0) return null;
+      const mins = diaMats.map((m) => parseInt(m.inicio.replace(":", "")));
+      const maxs = diaMats.map((m) => parseInt(m.fin.replace(":", "")));
+      return { entrada: Math.min(...mins), salida: Math.max(...maxs) };
+    };
+
     switch (filtroActivo) {
       case "libres_conmigo":
         bloquesTec.forEach((rango) => {
           const diasLibresCompartidos = [];
           diasSemana.forEach((dia) => {
-            const matBaseDia = horarioBase.materias.filter(
-              (m) => m.dia === dia
+            const limBase = getLimites(horarioBase.materias, dia);
+            const limAmigo = getLimites(amigo.materias, dia);
+            if (!limBase || !limAmigo) return;
+            const tBloqueIni = parseInt(
+              norm(rango).split("-")[0].replace(":", "")
             );
-            const susMatDia = amigo.materias.filter((m) => m.dia === dia);
-            if (matBaseDia.length === 0 || susMatDia.length === 0) return;
-
-            const getEstancia = (mats) => {
-              const inicios = mats.map((m) =>
-                parseInt(norm(m.rango).split("-")[0].replace(":", ""))
-              );
-              const fines = mats.map((m) =>
-                parseInt(norm(m.rango).split("-")[1].replace(":", ""))
-              );
-              return {
-                entrada: Math.min(...inicios),
-                salida: Math.max(...fines),
-              };
-            };
-
-            const estanciaBase = getEstancia(matBaseDia);
-            const estanciaAmigo = getEstancia(susMatDia);
-            const iniB = parseInt(norm(rango).split("-")[0].replace(":", ""));
-            const finB = parseInt(norm(rango).split("-")[1].replace(":", ""));
+            const tBloqueFin = parseInt(
+              norm(rango).split("-")[1].replace(":", "")
+            );
 
             if (
-              iniB >= Math.max(estanciaBase.entrada, estanciaAmigo.entrada) &&
-              finB <= Math.min(estanciaBase.salida, estanciaAmigo.salida)
+              tBloqueIni >= Math.max(limBase.entrada, limAmigo.entrada) &&
+              tBloqueFin <= Math.min(limBase.salida, limAmigo.salida)
             ) {
-              const baseOcupado = matBaseDia.some(
-                (m) => norm(m.rango) === norm(rango)
+              const baseOcupado = horarioBase.materias.some(
+                (m) => m.dia === dia && norm(m.rango) === norm(rango)
               );
-              const amigoOcupado = susMatDia.some(
-                (m) => norm(m.rango) === norm(rango)
+              const amigoOcupado = amigo.materias.some(
+                (m) => m.dia === dia && norm(m.rango) === norm(rango)
               );
               if (!baseOcupado && !amigoOcupado)
                 diasLibresCompartidos.push(dia);
             }
           });
-
-          if (diasLibresCompartidos.length > 0) {
-            let label =
-              diasLibresCompartidos.length === 5
-                ? "LUN-VIE"
-                : diasLibresCompartidos.length === 1
-                ? diasLibresCompartidos[0].slice(0, 2).toUpperCase()
-                : `${diasLibresCompartidos[0]
-                    .slice(0, 2)
-                    .toUpperCase()}-${diasLibresCompartidos[
-                    diasLibresCompartidos.length - 1
-                  ]
-                    .slice(0, 2)
-                    .toUpperCase()}`;
-            coincidenciasCompactas.push(`${label} ${rango.split(" ")[0]}`);
-          }
+          if (diasLibresCompartidos.length > 0)
+            coincidenciasCompactas.push(
+              `${diasLibresCompartidos[0].slice(0, 2).toUpperCase()}${
+                diasLibresCompartidos.length > 1
+                  ? "-" +
+                    diasLibresCompartidos[diasLibresCompartidos.length - 1]
+                      .slice(0, 2)
+                      .toUpperCase()
+                  : ""
+              } ${rango.split("-")[0]}`
+            );
         });
-        break;
-
-      case "materias_comun":
-        const materiasUnicas = new Set();
-        amigo.materias.forEach((sm) => {
-          horarioBase.materias.forEach((mm) => {
-            if (
-              mm.dia === sm.dia &&
-              norm(mm.rango) === norm(sm.rango) &&
-              mm.salon.trim().toLowerCase() === sm.salon.trim().toLowerCase()
-            ) {
-              materiasUnicas.add(mm.nombre.toUpperCase());
-            }
-          });
-        });
-        materiasUnicas.forEach((m) => coincidenciasCompactas.push(m));
         break;
 
       case "entrada_comun":
       case "salida_comun":
         diasSemana.forEach((dia) => {
-          const misMat = horarioBase.materias.filter((m) => m.dia === dia);
-          const susMat = amigo.materias.filter((m) => m.dia === dia);
-          if (misMat.length > 0 && susMat.length > 0) {
-            const hB =
-              filtroActivo === "entrada_comun"
-                ? misMat.sort((a, b) => a.inicio.localeCompare(b.inicio))[0]
-                    .inicio
-                : misMat.sort((a, b) => b.fin.localeCompare(a.fin))[0].fin;
-            const hA =
-              filtroActivo === "entrada_comun"
-                ? susMat.sort((a, b) => a.inicio.localeCompare(b.inicio))[0]
-                    .inicio
-                : susMat.sort((a, b) => b.fin.localeCompare(a.fin))[0].fin;
-            if (hB === hA)
+          const limB = getLimites(horarioBase.materias, dia);
+          const limA = getLimites(amigo.materias, dia);
+          if (limB && limA) {
+            if (
+              filtroActivo === "entrada_comun" &&
+              limB.entrada === limA.entrada
+            ) {
+              const horaStr = horarioBase.materias.find(
+                (m) =>
+                  m.dia === dia &&
+                  parseInt(m.inicio.replace(":", "")) === limB.entrada
+              ).inicio;
               coincidenciasCompactas.push(
-                `${dia.slice(0, 2).toUpperCase()} @ ${hB}`
+                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`
               );
+            }
+            if (
+              filtroActivo === "salida_comun" &&
+              limB.salida === limA.salida
+            ) {
+              const horaStr = horarioBase.materias.find(
+                (m) =>
+                  m.dia === dia &&
+                  parseInt(m.fin.replace(":", "")) === limB.salida
+              ).fin;
+              coincidenciasCompactas.push(
+                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`
+              );
+            }
           }
         });
+        break;
+
+      case "materias_comun":
+        const comunes = new Set();
+        amigo.materias.forEach((sm) => {
+          if (
+            horarioBase.materias.some(
+              (mm) =>
+                mm.dia === sm.dia &&
+                norm(mm.rango) === norm(sm.rango) &&
+                mm.salon.toLowerCase() === sm.salon.toLowerCase()
+            )
+          ) {
+            comunes.add(sm.nombre.toUpperCase());
+          }
+        });
+        comunes.forEach((c) => coincidenciasCompactas.push(c));
         break;
     }
     return coincidenciasCompactas.length > 0
@@ -179,63 +224,25 @@ export default function AmigosPage() {
       : null;
   };
 
-  const manejarSubida = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const nombreFinal = editandoAmigo ? editandoAmigo.nombreUsuario : nombre;
-    if (!nombreFinal) {
-      alert("Ingresa el nombre antes de subir.");
-      e.target.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const datos = transformarCSV(event.target.result, nombreFinal);
-        if (editandoAmigo) {
-          await db.horarios.update(editandoAmigo.id, {
-            materias: datos.materias,
-          });
-          alert(`Horario de ${nombreFinal} actualizado.`);
-          setEditandoAmigo(null);
-        } else {
-          await db.horarios.add({
-            nombreUsuario: nombreFinal,
-            materias: datos.materias,
-            esPrincipal: "false",
-            id: `amigo_${Date.now()}`,
-          });
-          setNombre("");
-          alert("Amigo añadido.");
-        }
-        e.target.value = "";
-      } catch (err) {
-        alert("Error: Revisa el formato en el botón de info (i).");
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const handleEditar = (e, amigo) => {
     e.stopPropagation();
     setEditandoAmigo(amigo);
-    sectionSubidaRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    setNombre(amigo.nombreUsuario);
+    setShowManual(true);
   };
 
-  const listaResultados = (() => {
+  const resultadosFiltrados = (() => {
     let base = amigos ? [...amigos] : [];
+    // AGREGA AL USUARIO PRINCIPAL A LA LISTA DE RESULTADOS SI EL SUJETO BASE ES UN AMIGO
     if (idAmigoBase !== "yo" && miHorario) {
-      const miNombreReal = perfil?.nombre || "Usuario";
       base.push({
         ...miHorario,
-        nombreUsuario: `${miNombreReal} (Tú)`,
+        nombreUsuario: `${perfil?.nombre || "Usuario"} (Tú)`,
         id: "yo_temp",
       });
     }
     return base.filter((item) => {
+      // Excluye al que está seleccionado como Base
       if (
         item.id === idAmigoBase ||
         (idAmigoBase === "yo" && item.id === "yo_temp")
@@ -244,24 +251,40 @@ export default function AmigosPage() {
       const cumpleNombre = item.nombreUsuario
         .toLowerCase()
         .includes(busqueda.toLowerCase());
-      if (!cumpleNombre) return false;
-      const detalle = obtenerDetalleFiltro(item);
-      return !!detalle;
+      return cumpleNombre && obtenerDetalleFiltro(item);
     });
   })();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in relative">
-      {/* BOTÓN INFO FLOTANTE */}
+    <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in relative px-2 text-white">
+      {showManual && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
+          onClick={() => setShowManual(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <EditorHorarioManual
+              nombreInicial={nombre}
+              onCancel={() => {
+                setShowManual(false);
+                setEditandoAmigo(null);
+                setNombre("");
+              }}
+              onSave={guardarDesdeEditor}
+            />
+          </div>
+        </div>
+      )}
+
       <button
         onClick={() => setShowInfoModal(true)}
-        className="fixed bottom-24 right-8 z-50 p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 transition-all active:scale-95"
+        className="fixed bottom-24 right-8 z-50 p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all"
       >
         <Info size={24} />
       </button>
 
       <header className="flex flex-col md:flex-row justify-between items-end gap-4">
-        <h1 className="text-5xl font-black italic tracking-tighter text-tec-blue uppercase text-white">
+        <h1 className="text-5xl font-black italic tracking-tighter text-tec-blue uppercase">
           Network
         </h1>
         <div className="relative w-full md:w-80">
@@ -272,7 +295,7 @@ export default function AmigosPage() {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre..."
+            placeholder="Buscar amigo..."
             className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 pl-12 outline-none focus:border-tec-blue transition-all"
           />
         </div>
@@ -280,208 +303,193 @@ export default function AmigosPage() {
 
       <section
         ref={sectionSubidaRef}
-        className={`bg-card-bg p-6 rounded-[2rem] border transition-all duration-300 flex flex-col md:flex-row gap-4 shadow-2xl ${
-          editandoAmigo
-            ? "border-accent-purple bg-accent-purple/5 ring-2 ring-accent-purple/20"
-            : "border-white/5"
-        }`}
+        className="bg-card-bg p-6 rounded-[2rem] border border-white/5 shadow-2xl flex flex-col gap-4"
       >
-        <div className="flex-1 space-y-2">
+        <div className="space-y-2">
           <p className="text-[10px] font-black uppercase text-gray-500 ml-2 tracking-widest">
             {editandoAmigo
-              ? `Editando a: ${editandoAmigo.nombreUsuario}`
-              : "Añadir Nuevo Amigo"}
+              ? `Modificando: ${editandoAmigo.nombreUsuario}`
+              : "Nuevo Integrante"}
           </p>
           <input
-            value={editandoAmigo ? editandoAmigo.nombreUsuario : nombre}
+            value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            disabled={!!editandoAmigo}
-            placeholder="Nombre del amigo"
-            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-tec-blue disabled:opacity-50 font-bold"
+            placeholder="Nombre del amigo..."
+            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
           />
         </div>
-        <div className="flex gap-2 items-end">
-          {editandoAmigo && (
-            <button
-              onClick={() => setEditandoAmigo(null)}
-              className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
-            >
-              <X size={20} />
-            </button>
-          )}
-          <label
-            className={`px-8 py-4 rounded-2xl font-black text-xs cursor-pointer flex items-center justify-center gap-2 transition-all shadow-lg ${
-              editandoAmigo
-                ? "bg-accent-purple text-white animate-pulse"
-                : "bg-tec-blue text-white"
-            }`}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => setShowManual(true)}
+            className="flex-1 py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] text-gray-400 hover:text-white transition-all uppercase flex items-center justify-center gap-2"
           >
-            <FileUp size={18} />{" "}
-            {editandoAmigo ? "ACTUALIZAR CSV" : "IMPORTAR CSV"}
+            <Keyboard size={16} /> Registro Manual
+          </button>
+          <label className="flex-1 py-4 bg-tec-blue text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:bg-blue-600 transition-all">
+            <FileUp size={16} /> IMPORTAR CSV{" "}
             <input
               type="file"
               className="hidden"
-              onChange={manejarSubida}
               accept=".csv"
+              onChange={manejarSubidaCSV}
             />
           </label>
         </div>
       </section>
 
-      <div className="p-4 bg-white/5 rounded-[2rem] border border-white/5 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-inner">
-        <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap ml-2">
-          Sujeto Base:
-        </span>
-        <button
-          onClick={() => setIdAmigoBase("yo")}
-          className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${
-            idAmigoBase === "yo"
-              ? "bg-tec-blue text-white shadow-lg"
-              : "bg-white/5 text-gray-500 hover:bg-white/10"
-          }`}
-        >
-          MI HORARIO
-        </button>
-        {amigos?.map((a) => (
+      <div className="space-y-4">
+        <div className="p-4 bg-white/5 rounded-[2rem] border border-white/5 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-inner">
+          <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap ml-2">
+            Sujeto Base:
+          </span>
           <button
-            key={a.id}
-            onClick={() => setIdAmigoBase(a.id)}
-            className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all ${
-              idAmigoBase === a.id
-                ? "bg-accent-purple text-white shadow-lg"
-                : "bg-white/5 text-gray-500 hover:bg-white/10"
+            onClick={() => setIdAmigoBase("yo")}
+            className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${
+              idAmigoBase === "yo"
+                ? "bg-tec-blue text-white shadow-lg"
+                : "bg-white/5 text-gray-500"
             }`}
           >
-            {a.nombreUsuario.toUpperCase()}
+            MI HORARIO
           </button>
-        ))}
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-        {[
-          {
-            id: "libres_conmigo",
-            label: "Huecos Libres",
-            icon: <Coffee size={14} />,
-          },
-          {
-            id: "materias_comun",
-            label: "Misma Clase",
-            icon: <BookOpen size={14} />,
-          },
-          {
-            id: "entrada_comun",
-            label: "Misma Entrada",
-            icon: <DoorOpen size={14} />,
-          },
-          {
-            id: "salida_comun",
-            label: "Misma Salida",
-            icon: <ArrowRightLeft size={14} />,
-          },
-        ].map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFiltroActivo(f.id)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-              filtroActivo === f.id
-                ? "bg-white text-black border-white shadow-xl"
-                : "bg-white/5 text-gray-500 border-white/5 hover:bg-white/10"
-            }`}
-          >
-            {f.icon} {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {listaResultados.map((amigo) => {
-          const detalles = obtenerDetalleFiltro(amigo);
-          return (
-            <div
-              key={amigo.id}
-              className={`p-6 border rounded-[2.5rem] shadow-xl flex flex-col min-h-[200px] transition-all ${
-                amigo.id === "yo_temp"
-                  ? "bg-tec-blue/10 border-tec-blue/30 ring-1 ring-tec-blue/50"
-                  : "bg-card-bg border-white/5"
+          {amigos?.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => setIdAmigoBase(a.id)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all ${
+                idAmigoBase === a.id
+                  ? "bg-accent-purple text-white shadow-lg"
+                  : "bg-white/5 text-gray-500"
               }`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl ${
-                    amigo.id === "yo_temp"
-                      ? "bg-tec-blue text-white"
-                      : "bg-tec-blue/10 text-tec-blue"
-                  }`}
-                >
-                  {amigo.nombreUsuario[0]}
-                </div>
-                <div className="text-[8px] font-black text-gray-500 uppercase">
-                  vs{" "}
-                  {idAmigoBase === "yo"
-                    ? "Ti"
-                    : amigos
-                        .find((a) => a.id === idAmigoBase)
-                        ?.nombreUsuario.split(" ")[0]}
-                </div>
-              </div>
-              <h3 className="text-xl font-black italic uppercase tracking-tighter truncate">
-                {amigo.nombreUsuario}
-              </h3>
-              <div className="mt-4 flex-1">
-                {detalles ? (
-                  <div className="flex flex-wrap gap-1">
-                    {detalles.map((d, i) => (
-                      <span
-                        key={i}
-                        className="bg-white/5 border border-white/10 text-[9px] px-2 py-1 rounded-lg text-tec-blue font-bold"
-                      >
-                        {d}
-                      </span>
-                    ))}
+              {a.nombreUsuario.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          {[
+            {
+              id: "libres_conmigo",
+              label: "Huecos",
+              icon: <Coffee size={14} />,
+            },
+            {
+              id: "materias_comun",
+              label: "Clases",
+              icon: <BookOpen size={14} />,
+            },
+            {
+              id: "entrada_comun",
+              label: "Entrada",
+              icon: <DoorOpen size={14} />,
+            },
+            {
+              id: "salida_comun",
+              label: "Salida",
+              icon: <ArrowRightLeft size={14} />,
+            },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFiltroActivo(f.id)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                filtroActivo === f.id
+                  ? "bg-white text-black border-white shadow-xl"
+                  : "bg-white/5 text-gray-500 border-white/5"
+              }`}
+            >
+              {f.icon} {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {resultadosFiltrados.map((amigo) => {
+            const detalles = obtenerDetalleFiltro(amigo);
+            return (
+              <div
+                key={amigo.id}
+                onClick={() => setAmigoSeleccionado(amigo)}
+                className={`p-6 border rounded-[2.5rem] shadow-xl flex flex-col min-h-[160px] transition-all cursor-pointer hover:scale-[1.02] ${
+                  amigo.id === "yo_temp"
+                    ? "bg-tec-blue/10 border-tec-blue/30"
+                    : "bg-card-bg border-white/5"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${
+                      amigo.id === "yo_temp"
+                        ? "bg-tec-blue text-white"
+                        : "bg-tec-blue/10 text-tec-blue"
+                    }`}
+                  >
+                    {amigo.nombreUsuario[0]}
                   </div>
-                ) : (
-                  <p className="text-[10px] text-gray-600 font-bold uppercase italic text-center py-4">
-                    Sin coincidencias
-                  </p>
-                )}
+                  <div className="text-[8px] font-black text-gray-500 uppercase">
+                    Coincidencia
+                  </div>
+                </div>
+                <h3 className="text-lg font-black italic uppercase truncate">
+                  {amigo.nombreUsuario}
+                </h3>
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {detalles?.map((d, i) => (
+                    <span
+                      key={i}
+                      className="bg-white/5 border border-white/10 text-[8px] px-2 py-1 rounded-lg text-tec-blue font-bold"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* GESTIÓN DE PERFILES */}
-      <section className="pt-20 border-t border-white/5 space-y-6 text-center">
-        <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
-          Gestión de Perfiles
-        </h2>
+      <section className="pt-16 border-t border-white/5 space-y-8">
+        <div className="text-center space-y-2">
+          <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
+            Directorio de Red
+          </h2>
+          <p className="text-[9px] text-gray-700 font-bold uppercase italic">
+            Edita o elimina perfiles desde aquí
+          </p>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {amigos?.map((amigo) => (
             <div
               key={amigo.id}
-              onClick={() => setAmigoSeleccionado(amigo)}
-              className="bg-white/5 p-5 rounded-[2rem] border border-white/5 flex flex-col items-center group relative hover:bg-white/10 hover:border-tec-blue/50 transition-all cursor-pointer"
+              className="bg-white/5 p-5 rounded-[2rem] border border-white/5 flex flex-col items-center group relative hover:bg-white/10 transition-all shadow-lg"
             >
-              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 font-black mb-2 group-hover:text-tec-blue transition-colors">
-                {amigo.nombreUsuario[0]}
+              <div
+                onClick={() => setAmigoSeleccionado(amigo)}
+                className="cursor-pointer flex flex-col items-center w-full"
+              >
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 font-black mb-2">
+                  {amigo.nombreUsuario[0]}
+                </div>
+                <span className="font-bold text-[10px] uppercase truncate w-full text-center">
+                  {amigo.nombreUsuario}
+                </span>
               </div>
-              <span className="font-bold text-[11px] uppercase truncate w-full">
-                {amigo.nombreUsuario}
-              </span>
-              <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
+              <div className="absolute -top-2 -right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all z-10">
                 <button
                   onClick={(e) => handleEditar(e, amigo)}
-                  className="bg-tec-blue text-white p-2 rounded-full shadow-xl hover:scale-110 transition-transform"
+                  className="bg-tec-blue text-white p-2.5 rounded-full shadow-2xl hover:scale-110 active:scale-95"
                 >
                   <Edit3 size={12} />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("¿Borrar amigo?")) db.horarios.delete(amigo.id);
+                    if (confirm(`¿Borrar a ${amigo.nombreUsuario}?`))
+                      db.horarios.delete(amigo.id);
                   }}
-                  className="bg-red-500 text-white p-2 rounded-full shadow-xl hover:scale-110 transition-transform"
+                  className="bg-red-500 text-white p-2.5 rounded-full shadow-2xl hover:scale-110 active:scale-95"
                 >
                   <Trash2 size={12} />
                 </button>
@@ -491,16 +499,17 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {/* MODAL DE INFO CSV (MISMO QUE EN CONFIG) */}
       {showInfoModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in duration-300">
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in"
+          onClick={() => setShowInfoModal(false)}
+        >
           <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setShowInfoModal(false)}
-          />
-          <div className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-3 text-tec-blue">
+            className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-8 text-tec-blue">
+              <div className="flex items-center gap-3">
                 <Info size={28} />
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">
                   Guía de Formato
@@ -513,15 +522,14 @@ export default function AmigosPage() {
                 <X size={20} />
               </button>
             </div>
-
-            <div className="space-y-8">
+            <div className="space-y-8 text-left">
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                  <TableIcon size={14} /> Vista Excel (Lunes a Viernes)
+                  <TableIcon size={14} /> Vista Excel
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-                  <table className="w-full text-left text-[9px] font-bold min-w-[700px]">
-                    <thead className="bg-tec-blue/10 text-tec-blue uppercase text-center">
+                  <table className="w-full text-[9px] font-bold min-w-[600px] text-center">
+                    <thead className="bg-tec-blue/10 text-tec-blue uppercase text-white">
                       <tr>
                         <th className="p-3 border-r border-white/5">Hora</th>
                         <th className="p-3 border-r border-white/5">Lunes</th>
@@ -535,7 +543,7 @@ export default function AmigosPage() {
                     </thead>
                     <tbody className="text-gray-300">
                       <tr>
-                        <td className="p-3 border-b border-white/5 bg-white/5 italic text-center font-mono whitespace-nowrap">
+                        <td className="p-3 border-b border-white/5 bg-white/5 italic font-mono whitespace-nowrap">
                           08:00 - 09:00
                         </td>
                         <td className="p-3 border-b border-r border-white/5">
@@ -550,55 +558,30 @@ export default function AmigosPage() {
                         <td className="p-3 border-b border-r border-white/5">
                           IA (LCA)
                         </td>
-                        <td className="p-3 border-b border-white/5 text-center text-gray-700">
+                        <td className="p-3 border-b border-white/5 text-gray-700">
                           ---
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="p-3 border-b border-white/5 bg-white/5 italic text-center font-mono whitespace-nowrap">
-                          10:00 - 11:00
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          Prog. Web (FF1)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          Prog. Web (LSO)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          Prog. Web (FF1)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          Prog. Web (LSO)
-                        </td>
-                        <td className="p-3 border-b border-white/5">
-                          Prog. Web (LR)
                         </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
-                  * Formato: <span className="text-white">Materia (Salón)</span>
-                  . El salón debe ir al final entre paréntesis para que el
-                  Network lo reconozca.
+                <p className="text-[10px] text-gray-500 font-medium">
+                  * Formato:{" "}
+                  <span className="text-white font-bold">Materia (Salón)</span>.
+                  Paréntesis obligatorios.
                 </p>
               </div>
-
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                  <FileType size={14} /> Estructura del Archivo (CSV)
+                  <FileType size={14} /> Estructura CSV
                 </div>
-                <div className="bg-black/40 p-5 rounded-2xl border border-white/5 font-mono text-[10px] text-tec-blue leading-relaxed shadow-inner overflow-x-auto">
-                  <span className="text-gray-500">
+                <div className="bg-black/40 p-5 rounded-2xl border border-white/5 font-mono text-[10px] text-tec-blue leading-relaxed overflow-x-auto">
+                  <span className="text-gray-500 font-bold uppercase">
                     Hora,Lunes,Martes,Miércoles,Jueves,Viernes
                   </span>
                   <br />
-                  08:00 - 09:00,Inteligencia Artificial (LCA),Inteligencia
-                  Artificial (LCA),Inteligencia Artificial (LCA),Inteligencia
-                  Artificial (LCA), <br />
-                  10:00 - 11:00,Programación Web (FF1),Programación Web
-                  (LSO),Programación Web (FF1),Programación Web
-                  (LSO),Programación Web (LR)
+                  08:00 - 09:00,IA (LCA),IA (LCA),IA (LCA),IA (LCA), <br />
+                  10:00 - 11:00,Prog Web (FF1),,Prog Web (FF1),,Prog Web (LR)
                 </div>
               </div>
             </div>
@@ -606,7 +589,6 @@ export default function AmigosPage() {
         </div>
       )}
 
-      {/* MODAL HORARIO */}
       {amigoSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div

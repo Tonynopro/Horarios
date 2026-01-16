@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
+import EditorHorarioManual from "@/components/EditorHorarioManual"; // Importamos el componente aparte
 import {
   FileUp,
   User,
@@ -19,6 +20,7 @@ import {
   Info,
   Table as TableIcon,
   FileType,
+  Keyboard,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 
@@ -27,6 +29,7 @@ export default function ConfigPage() {
   const [status, setStatus] = useState({ type: "", msg: "" });
   const [visible, setVisible] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showManual, setShowManual] = useState(false); // Estado para el editor manual
 
   // Estados para modales y selección
   const [pendientesConfig, setPendientesConfig] = useState([]);
@@ -141,7 +144,6 @@ export default function ConfigPage() {
           msg: "Datos sincronizados correctamente.",
         });
 
-        // MANDAR AL USUARIO ARRIBA SI HAY PERFILES PARA CONFIGURAR
         if (perfilesValidos.length > 0) {
           topRef.current?.scrollIntoView({
             behavior: "smooth",
@@ -157,10 +159,47 @@ export default function ConfigPage() {
     reader.readAsText(file);
   };
 
+  // --- GUARDADO DESDE EL COMPONENTE EDITOR MANUAL ---
+  const guardarDesdeEditor = async (data) => {
+    try {
+      await db.horarios.where({ esPrincipal: "true" }).delete();
+      await db.horarios.add({
+        ...data,
+        esPrincipal: "true",
+        id: `me_${Date.now()}`,
+      });
+      await db.perfil.clear();
+      await db.perfil.add({
+        nombre: data.nombreUsuario,
+        id: "usuario_principal",
+        actualizado: Date.now(),
+      });
+      setShowManual(false);
+      setStatus({ type: "success", msg: "Perfil actualizado correctamente." });
+    } catch (err) {
+      setStatus({ type: "error", msg: "Error al guardar cambios." });
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-10 pb-20 animate-in fade-in duration-500 relative">
-      {/* PUNTO DE REFERENCIA PARA EL SCROLL */}
       <div ref={topRef} className="absolute -top-20" />
+
+      {/* MODAL EDITOR MANUAL APARTE */}
+      {showManual && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          onClick={() => setShowManual(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <EditorHorarioManual
+              nombreInicial={perfilActual?.nombre || ""}
+              onCancel={() => setShowManual(false)}
+              onSave={guardarDesdeEditor}
+            />
+          </div>
+        </div>
+      )}
 
       {/* BOTÓN INFO FLOTANTE */}
       <button
@@ -231,58 +270,107 @@ export default function ConfigPage() {
         )}
 
         {/* Perfil Individual */}
-        <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-          <div className="flex items-center gap-3 text-tec-blue mb-6">
-            <User size={24} />{" "}
-            <h2 className="text-xl font-black uppercase tracking-tight text-white">
-              Mi Perfil
-            </h2>
+        <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3 text-tec-blue">
+              <User size={24} />{" "}
+              <h2 className="text-xl font-black uppercase tracking-tight text-white">
+                Mi Perfil
+              </h2>
+            </div>
+            {perfilActual && (
+              <span className="text-[10px] font-black bg-tec-blue/10 text-tec-blue px-3 py-1 rounded-full uppercase tracking-widest border border-tec-blue/20">
+                Sistema Activo
+              </span>
+            )}
           </div>
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder={perfilActual?.nombre || "Ej. Ricardo Suárez"}
-            className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none focus:border-tec-blue font-bold text-white mb-6"
-          />
-          <label className="flex flex-col items-center justify-center w-full py-12 bg-tec-blue/5 border-2 border-dashed border-tec-blue/20 rounded-[2rem] cursor-pointer hover:bg-tec-blue/10 transition-all group">
-            <FileUp
-              className="text-tec-blue mb-2 group-hover:scale-110 transition-transform"
-              size={32}
-            />
-            <span className="font-black text-tec-blue uppercase text-xs tracking-widest">
-              Subir CSV Personal
-            </span>
-            <input
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = async (ev) => {
-                  try {
-                    const data = transformarCSV(ev.target.result, nombre);
-                    await db.horarios.where({ esPrincipal: "true" }).delete();
-                    await db.horarios.add({ ...data, esPrincipal: "true" });
-                    await db.perfil.clear();
-                    await db.perfil.add({
-                      nombre,
-                      id: "usuario_principal",
-                      actualizado: Date.now(),
-                    });
-                    setStatus({ type: "success", msg: "¡Horario importado!" });
-                  } catch (err) {
-                    setStatus({
-                      type: "error",
-                      msg: "Formato incorrecto (i).",
-                    });
-                  }
-                };
-                reader.readAsText(file);
-              }}
-              onClick={(e) => (e.target.value = null)}
-            />
-          </label>
+
+          <div className="space-y-4">
+            <div className="relative">
+              <p className="text-[10px] font-black uppercase text-gray-500 ml-2 mb-2 tracking-widest">
+                Nombre de Usuario
+              </p>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder={perfilActual?.nombre || "Ej. Ricardo Suárez"}
+                className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Opción Manual */}
+              <button
+                onClick={() => setShowManual(true)}
+                className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group"
+              >
+                <div className="w-12 h-12 bg-tec-blue/10 rounded-xl flex items-center justify-center text-tec-blue group-hover:scale-110 transition-transform">
+                  <Keyboard size={24} />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-xs uppercase text-white">
+                    Editar a mano
+                  </p>
+                  <p className="text-[9px] text-gray-500 uppercase">
+                    Modificar sin archivos
+                  </p>
+                </div>
+              </button>
+
+              {/* Opción CSV */}
+              <label className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all group">
+                <div className="w-12 h-12 bg-tec-blue/10 rounded-xl flex items-center justify-center text-tec-blue group-hover:scale-110 transition-transform">
+                  <FileUp size={24} />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-xs uppercase text-white">
+                    Subir CSV
+                  </p>
+                  <p className="text-[9px] text-gray-500 uppercase">
+                    Actualizar vía archivo
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                      try {
+                        const data = transformarCSV(
+                          ev.target.result,
+                          nombre || perfilActual?.nombre
+                        );
+                        await db.horarios
+                          .where({ esPrincipal: "true" })
+                          .delete();
+                        await db.horarios.add({ ...data, esPrincipal: "true" });
+                        await db.perfil.clear();
+                        await db.perfil.add({
+                          nombre: nombre || perfilActual?.nombre,
+                          id: "usuario_principal",
+                          actualizado: Date.now(),
+                        });
+                        setStatus({
+                          type: "success",
+                          msg: "¡Perfil actualizado!",
+                        });
+                      } catch (err) {
+                        setStatus({
+                          type: "error",
+                          msg: "Error de formato (i).",
+                        });
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                  onClick={(e) => (e.target.value = null)}
+                />
+              </label>
+            </div>
+          </div>
         </section>
 
         {/* Sync Data */}
@@ -350,7 +438,7 @@ export default function ConfigPage() {
         </button>
       </div>
 
-      {/* MODAL DE INFO CSV */}
+      {/* MODAL DE INFO CSV RESTAURADO */}
       {showInfoModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in duration-300">
           <div
@@ -358,8 +446,8 @@ export default function ConfigPage() {
             onClick={() => setShowInfoModal(false)}
           />
           <div className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-3 text-tec-blue">
+            <div className="flex justify-between items-center mb-8 text-tec-blue">
+              <div className="flex items-center gap-3">
                 <Info size={28} />
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">
                   Guía de Formato
@@ -414,31 +502,30 @@ export default function ConfigPage() {
                         </td>
                       </tr>
                       <tr>
-                        <td className="p-3 border-b border-white/5 bg-white/5 italic font-mono whitespace-nowrap">
+                        <td className="p-3 border-white/5 bg-white/5 italic font-mono whitespace-nowrap">
                           10:00 - 11:00
                         </td>
-                        <td className="p-3 border-b border-r border-white/5">
+                        <td className="p-3 border-r border-white/5">
                           Prog. Web (FF1)
                         </td>
-                        <td className="p-3 border-b border-r border-white/5">
+                        <td className="p-3 border-r border-white/5">
                           Prog. Web (LSO)
                         </td>
-                        <td className="p-3 border-b border-r border-white/5">
+                        <td className="p-3 border-r border-white/5">
                           Prog. Web (FF1)
                         </td>
-                        <td className="p-3 border-b border-r border-white/5">
+                        <td className="p-3 border-r border-white/5">
                           Prog. Web (LSO)
                         </td>
-                        <td className="p-3 border-b border-white/5">
-                          Prog. Web (LR)
-                        </td>
+                        <td className="p-3">Prog. Web (LR)</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
                 <p className="text-[10px] text-gray-500 leading-relaxed font-medium">
-                  * Formato: <span className="text-white">Materia (Salón)</span>
-                  . El salón debe ir al final entre paréntesis.
+                  * Formato:{" "}
+                  <span className="text-white font-bold">Materia (Salón)</span>.
+                  El salón debe ir entre paréntesis al final.
                 </p>
               </div>
 
@@ -451,9 +538,7 @@ export default function ConfigPage() {
                     Hora,Lunes,Martes,Miércoles,Jueves,Viernes
                   </span>
                   <br />
-                  08:00 - 09:00,Inteligencia Artificial (LCA),Inteligencia
-                  Artificial (LCA),Inteligencia Artificial (LCA),Inteligencia
-                  Artificial (LCA), <br />
+                  08:00 - 09:00,IA (LCA),IA (LCA),IA (LCA),IA (LCA), <br />
                   10:00 - 11:00,Programación Web (FF1),Programación Web
                   (LSO),Programación Web (FF1),Programación Web
                   (LSO),Programación Web (LR)
