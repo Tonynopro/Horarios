@@ -1,6 +1,6 @@
 {
   "name": "Tec Horarios",
-  "short_name": "TecMadero",
+  "short_name": "Horarios",
   "description": "Gestión de horarios y red de amigos del Instituto Tecnológico de Ciudad Madero",
   "start_url": "/",
   "display": "standalone",

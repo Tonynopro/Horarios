@@ -67,12 +67,13 @@ export default function Sidebar() {
       );
     }) || "Fuera de bloque";
 
-  // Agregamos validación opcional para evitar el error de 'undefined'
+  // LOGICA: Buscar amigos en el bloque actual (sea el tuyo o el del sistema si estás libre)
   const amigosEnClaseAhora =
     amigos
       ?.map((amigo) => {
         const suClase = obtenerClaseActual(amigo.materias);
         const rangoBuscado = claseHoy?.rango || rangoActualSistema;
+
         if (suClase && suClase.rango === rangoBuscado) {
           const esMismaClase =
             claseHoy &&
@@ -82,7 +83,7 @@ export default function Sidebar() {
         }
         return null;
       })
-      .filter(Boolean) || []; // Si es undefined, devolvemos array vacío
+      .filter(Boolean) || [];
 
   const menuItems = [
     { icon: <Home size={20} />, label: "Mi Horario", href: "/" },
@@ -90,18 +91,26 @@ export default function Sidebar() {
     { icon: <Settings size={20} />, label: "Configuración", href: "/config" },
   ];
 
+  const tieneContenido =
+    (claseHoy || amigosEnClaseAhora.length > 0) && !estaCerrado;
+
   return (
     <>
       {/* MOBILE UI */}
       <div className="md:hidden">
-        {claseHoy && !estaCerrado && (
+        {tieneContenido && (
           <div
             onClick={() => setShowMobileDrawer(true)}
             className="fixed bottom-20 left-4 right-4 bg-card-bg/95 border border-tec-blue/40 p-3 rounded-2xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 z-[45] backdrop-blur-md active:scale-95 transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Zap size={16} className="text-tec-blue fill-tec-blue" />
+                <Zap
+                  size={16}
+                  className={`${
+                    claseHoy ? "text-tec-blue fill-tec-blue" : "text-gray-500"
+                  }`}
+                />
                 {amigosEnClaseAhora.length > 0 && (
                   <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-card-bg">
                     {amigosEnClaseAhora.length}
@@ -110,10 +119,12 @@ export default function Sidebar() {
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase text-tec-blue leading-none mb-1">
-                  En clase ahora
+                  {claseHoy ? "Tu Clase" : "Amigos en Clase"}
                 </p>
-                <p className="text-[11px] font-bold text-white/90 truncate max-w-[150px]">
-                  {claseHoy.nombre}
+                <p className="text-[11px] font-bold text-white/90 truncate max-w-[180px]">
+                  {claseHoy
+                    ? claseHoy.nombre
+                    : `${amigosEnClaseAhora.length} amigos ocupados`}
                 </p>
               </div>
             </div>
@@ -132,14 +143,18 @@ export default function Sidebar() {
               <header className="flex justify-between items-start mb-6">
                 <div>
                   <h3 className="text-2xl font-black italic text-white uppercase leading-none">
-                    {claseHoy?.rango}
+                    {claseHoy?.rango || rangoActualSistema}
                   </h3>
-                  <p className="text-tec-blue font-bold text-sm mt-1 uppercase tracking-tight">
-                    {claseHoy?.nombre}
-                  </p>
-                  <div className="flex items-center gap-1 mt-2 text-gray-500 text-[10px] font-black">
-                    <MapPin size={12} /> SALÓN: {claseHoy?.salon}
-                  </div>
+                  {claseHoy && (
+                    <>
+                      <p className="text-tec-blue font-bold text-sm mt-1 uppercase tracking-tight">
+                        {claseHoy.nombre}
+                      </p>
+                      <div className="flex items-center gap-1 mt-2 text-gray-500 text-[10px] font-black">
+                        <MapPin size={12} /> SALÓN: {claseHoy.salon}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowMobileDrawer(false)}
@@ -151,7 +166,7 @@ export default function Sidebar() {
 
               <div className="space-y-4">
                 <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
-                  Ocupados:
+                  Estado de la red:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {amigosEnClaseAhora.map((amigo) => (
@@ -181,7 +196,7 @@ export default function Sidebar() {
                   ))}
                   {amigosEnClaseAhora.length === 0 && (
                     <p className="text-[10px] text-gray-700 italic col-span-2 text-center py-4">
-                      Nadie más está en clase ahora
+                      Nadie en red tiene clase ahora
                     </p>
                   )}
                 </div>
@@ -213,7 +228,7 @@ export default function Sidebar() {
           </h2>
           <div className="mt-4 p-4 bg-white/[0.03] rounded-2xl border border-white/5 shadow-inner">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-tec-blue/20 flex items-center justify-center text-tec-blue font-black text-xl border border-tec-blue/30 shadow-[0_0_15px_rgba(0,82,155,0.2)]">
+              <div className="w-11 h-11 rounded-full bg-tec-blue/20 flex items-center justify-center text-tec-blue font-black text-xl border border-tec-blue/30">
                 {perfil?.nombre ? (
                   perfil.nombre[0].toUpperCase()
                 ) : (
@@ -240,7 +255,7 @@ export default function Sidebar() {
           }`}
         >
           <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-500 tracking-widest">
-            <span>ESTADO</span>
+            <span>Estado Actual</span>
             <div
               className={`w-2 h-2 rounded-full ${
                 estaCerrado
@@ -271,21 +286,19 @@ export default function Sidebar() {
           ))}
         </nav>
 
+        {/* WIDGET INFERIOR DINAMICO */}
         <div
           className={`mt-auto p-5 rounded-[2.2rem] border transition-all relative overflow-visible ${
-            claseHoy && !estaCerrado
+            tieneContenido
               ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40 shadow-2xl"
               : "bg-white/[0.02] border-white/5"
           }`}
         >
           {amigoTooltip && (
-            <div className="absolute bottom-[105%] left-0 w-[110%] -left-[5%] p-4 bg-card-bg border border-tec-blue/50 text-white rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 z-[60] backdrop-blur-md">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 rounded-full bg-tec-blue shadow-[0_0_8px_rgba(0,82,155,1)]" />
-                <p className="text-[11px] font-black uppercase tracking-widest text-tec-blue">
-                  {amigoTooltip.nombreUsuario}
-                </p>
-              </div>
+            <div className="absolute bottom-[105%] left-0 w-[110%] -left-[5%] p-4 bg-card-bg border border-tec-blue/50 text-white rounded-[1.5rem] shadow-2xl animate-in fade-in zoom-in-95 z-[60] backdrop-blur-md">
+              <p className="text-[11px] font-black uppercase tracking-widest text-tec-blue mb-1">
+                {amigoTooltip.nombreUsuario}
+              </p>
               <p className="text-xs font-bold leading-tight mb-2 text-white/90">
                 {amigoTooltip.claseActual.nombre}
               </p>
@@ -302,34 +315,51 @@ export default function Sidebar() {
             <Zap
               size={14}
               className={
-                claseHoy && !estaCerrado
-                  ? "text-tec-blue fill-tec-blue drop-shadow-[0_0_5px_rgba(0,82,155,1)]"
+                claseHoy
+                  ? "text-tec-blue fill-tec-blue shadow-[0_0_5px_blue]"
                   : "text-gray-600"
               }
             />
             <span className="text-[10px] font-black uppercase tracking-tighter text-gray-400">
-              Monitor Clase
+              {estaCerrado
+                ? "Fuera de Horario"
+                : claseHoy
+                ? "En Clase"
+                : amigosEnClaseAhora.length > 0
+                ? "Red en Clase"
+                : "Libre"}
             </span>
           </div>
 
-          {claseHoy && !estaCerrado ? (
+          {tieneContenido ? (
             <div className="space-y-4">
-              <div>
-                <p className="text-xl font-black leading-tight tracking-tighter text-white">
-                  {claseHoy.rango}
-                </p>
-                <p className="text-xs text-gray-400 font-bold uppercase mt-1 line-clamp-1 italic">
-                  {claseHoy.nombre}
-                </p>
-                <div className="flex items-center gap-1 mt-1.5">
-                  <MapPin size={10} className="text-tec-blue" />
-                  <p className="text-[11px] text-tec-blue font-black uppercase">
-                    Aula: {claseHoy.salon}
+              {claseHoy ? (
+                <div>
+                  <p className="text-xl font-black leading-tight tracking-tighter text-white">
+                    {claseHoy.rango}
+                  </p>
+                  <p className="text-xs text-gray-400 font-bold uppercase mt-1 line-clamp-1 italic">
+                    {claseHoy.nombre}
+                  </p>
+                  <div className="flex items-center gap-1 mt-1.5 text-tec-blue font-black uppercase text-[11px]">
+                    <MapPin size={10} /> Aula: {claseHoy.salon}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                  <p className="text-[10px] text-gray-500 font-black uppercase">
+                    Tu estado:
+                  </p>
+                  <p className="text-xs font-bold text-white uppercase italic">
+                    Sin clases asignadas
                   </p>
                 </div>
-              </div>
+              )}
 
               <div className="pt-3 border-t border-white/5">
+                <p className="text-[10px] font-black text-gray-500 uppercase mb-2.5">
+                  Ocupados ahora:
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {amigosEnClaseAhora.map((amigo) => (
                     <button
@@ -343,7 +373,7 @@ export default function Sidebar() {
                       }
                       className={`relative px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border flex items-center gap-1.5 ${
                         amigo.esMismaClase
-                          ? "bg-green-500/10 border-green-500/50 text-green-400 shadow-[0_0_15px_rgba(34,197,94,0.15)] scale-105"
+                          ? "bg-green-500/10 border-green-500/50 text-green-400"
                           : "bg-white/5 border-white/5 text-gray-400 hover:border-tec-blue/50"
                       }`}
                     >
@@ -355,7 +385,7 @@ export default function Sidebar() {
                   ))}
                   {amigosEnClaseAhora.length === 0 && (
                     <span className="text-[9px] text-gray-600 font-bold italic uppercase">
-                      Sin red activa
+                      Nadie activo
                     </span>
                   )}
                 </div>
@@ -363,7 +393,7 @@ export default function Sidebar() {
             </div>
           ) : (
             <p className="text-sm text-gray-500 font-bold uppercase tracking-tight italic">
-              Campus inactivo.
+              {estaCerrado ? "Campus inactivo." : "No hay actividad en red."}
             </p>
           )}
         </div>
