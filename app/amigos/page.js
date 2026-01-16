@@ -24,19 +24,21 @@ import {
 export default function AmigosPage() {
   const [nombre, setNombre] = useState("");
   const [busqueda, setBusqueda] = useState("");
-  const [filtroActivo, setFiltroActivo] = useState("libres_conmigo"); // Iniciamos con un filtro activo
+  const [filtroActivo, setFiltroActivo] = useState("libres_conmigo");
   const [amigoSeleccionado, setAmigoSeleccionado] = useState(null);
   const [idAmigoBase, setIdAmigoBase] = useState("yo");
   const [editandoAmigo, setEditandoAmigo] = useState(null);
 
   const sectionSubidaRef = useRef(null);
 
+  // --- CONSULTAS REACTIVAS ---
   const amigos = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "false" }).toArray()
   );
   const miHorario = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first()
   );
+  const perfil = useLiveQuery(() => db.perfil.toCollection().first()); // Obtenemos tu perfil
 
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
   const bloquesTec = [
@@ -95,10 +97,10 @@ export default function AmigosPage() {
             const iniB = parseInt(norm(rango).split("-")[0].replace(":", ""));
             const finB = parseInt(norm(rango).split("-")[1].replace(":", ""));
 
-            const ambosEnCampus =
+            if (
               iniB >= Math.max(estanciaBase.entrada, estanciaAmigo.entrada) &&
-              finB <= Math.min(estanciaBase.salida, estanciaAmigo.salida);
-            if (ambosEnCampus) {
+              finB <= Math.min(estanciaBase.salida, estanciaAmigo.salida)
+            ) {
               const baseOcupado = matBaseDia.some(
                 (m) => norm(m.rango) === norm(rango)
               );
@@ -132,11 +134,11 @@ export default function AmigosPage() {
         const materiasUnicas = new Set();
         amigo.materias.forEach((sm) => {
           horarioBase.materias.forEach((mm) => {
-            const mismoDia = mm.dia === sm.dia;
-            const mismoRango = norm(mm.rango) === norm(sm.rango);
-            const mismoSalon =
-              mm.salon.trim().toLowerCase() === sm.salon.trim().toLowerCase();
-            if (mismoDia && mismoRango && mismoSalon) {
+            if (
+              mm.dia === sm.dia &&
+              norm(mm.rango) === norm(sm.rango) &&
+              mm.salon.trim().toLowerCase() === sm.salon.trim().toLowerCase()
+            ) {
               materiasUnicas.add(mm.nombre.toUpperCase());
             }
           });
@@ -200,7 +202,7 @@ export default function AmigosPage() {
             id: `amigo_${Date.now()}`,
           });
           setNombre("");
-          alert("Amigo añadido con éxito.");
+          alert("Amigo añadido.");
         }
         e.target.value = "";
       } catch (err) {
@@ -219,21 +221,39 @@ export default function AmigosPage() {
     });
   };
 
-  const listaResultados =
-    amigos?.filter((amigo) => {
-      if (amigo.id === idAmigoBase) return false;
-      const cumpleNombre = amigo.nombreUsuario
+  // --- LÓGICA DE LISTA DE RESULTADOS ACTUALIZADA ---
+  const listaResultados = (() => {
+    let base = amigos ? [...amigos] : [];
+
+    // Si la base de comparación NO eres tú, inyectamos tu perfil real en la lista de tarjetas
+    if (idAmigoBase !== "yo" && miHorario) {
+      const miNombreReal = perfil?.nombre || "Usuario";
+      base.push({
+        ...miHorario,
+        nombreUsuario: `${miNombreReal} (Tú)`,
+        id: "yo_temp",
+      });
+    }
+
+    return base.filter((item) => {
+      if (
+        item.id === idAmigoBase ||
+        (idAmigoBase === "yo" && item.id === "yo_temp")
+      )
+        return false;
+      const cumpleNombre = item.nombreUsuario
         .toLowerCase()
         .includes(busqueda.toLowerCase());
       if (!cumpleNombre) return false;
-      const detalle = obtenerDetalleFiltro(amigo);
+      const detalle = obtenerDetalleFiltro(item);
       return !!detalle;
-    }) || [];
+    });
+  })();
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in">
       <header className="flex flex-col md:flex-row justify-between items-end gap-4">
-        <h1 className="text-5xl font-black italic tracking-tighter text-tec-blue uppercase">
+        <h1 className="text-5xl font-black italic tracking-tighter text-tec-blue uppercase text-white">
           Network
         </h1>
         <div className="relative w-full md:w-80">
@@ -250,7 +270,6 @@ export default function AmigosPage() {
         </div>
       </header>
 
-      {/* REGISTRO */}
       <section
         ref={sectionSubidaRef}
         className={`bg-card-bg p-6 rounded-[2rem] border transition-all duration-300 flex flex-col md:flex-row gap-4 shadow-2xl ${
@@ -301,17 +320,16 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {/* SELECTOR DE COMPARACIÓN */}
       <div className="p-4 bg-white/5 rounded-[2rem] border border-white/5 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-inner">
-        <span className="text-[10px] font-black uppercase text-gray-500 whitespace-nowrap ml-2">
-          Comparar contra:
+        <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap ml-2">
+          Sujeto Base:
         </span>
         <button
           onClick={() => setIdAmigoBase("yo")}
           className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${
             idAmigoBase === "yo"
               ? "bg-tec-blue text-white shadow-lg"
-              : "bg-white/5 text-gray-500"
+              : "bg-white/5 text-gray-500 hover:bg-white/10"
           }`}
         >
           MI HORARIO
@@ -323,7 +341,7 @@ export default function AmigosPage() {
             className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all ${
               idAmigoBase === a.id
                 ? "bg-accent-purple text-white shadow-lg"
-                : "bg-white/5 text-gray-500"
+                : "bg-white/5 text-gray-500 hover:bg-white/10"
             }`}
           >
             {a.nombreUsuario.toUpperCase()}
@@ -331,17 +349,16 @@ export default function AmigosPage() {
         ))}
       </div>
 
-      {/* BARRA DE FILTROS INTELIGENTES (Directorio eliminado) */}
       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
         {[
           {
             id: "libres_conmigo",
-            label: "Horas Libres Juntos",
+            label: "Huecos Libres",
             icon: <Coffee size={14} />,
           },
           {
             id: "materias_comun",
-            label: "Misma Clase (Salón)",
+            label: "Misma Clase",
             icon: <BookOpen size={14} />,
           },
           {
@@ -369,20 +386,29 @@ export default function AmigosPage() {
         ))}
       </div>
 
-      {/* RESULTADOS FILTRADOS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 min-h-[250px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {listaResultados.map((amigo) => {
           const detalles = obtenerDetalleFiltro(amigo);
           return (
             <div
               key={amigo.id}
-              className="p-6 bg-card-bg border border-white/5 rounded-[2.5rem] shadow-xl flex flex-col min-h-[200px]"
+              className={`p-6 border rounded-[2.5rem] shadow-xl flex flex-col min-h-[200px] transition-all ${
+                amigo.id === "yo_temp"
+                  ? "bg-tec-blue/10 border-tec-blue/30 ring-1 ring-tec-blue/50"
+                  : "bg-card-bg border-white/5"
+              }`}
             >
               <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 rounded-2xl bg-tec-blue/10 flex items-center justify-center text-tec-blue font-black text-xl">
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl ${
+                    amigo.id === "yo_temp"
+                      ? "bg-tec-blue text-white"
+                      : "bg-tec-blue/10 text-tec-blue"
+                  }`}
+                >
                   {amigo.nombreUsuario[0]}
                 </div>
-                <div className="text-[8px] font-black text-gray-700 uppercase">
+                <div className="text-[8px] font-black text-gray-500 uppercase">
                   vs{" "}
                   {idAmigoBase === "yo"
                     ? "Ti"
@@ -417,10 +443,9 @@ export default function AmigosPage() {
         })}
       </div>
 
-      {/* GESTIÓN DE PERFILES */}
       <section className="pt-20 border-t border-white/5 space-y-6 text-center">
         <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
-          Perfiles Guardados - Clic para ver horario
+          Gestión de Perfiles
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {amigos?.map((amigo) => (
@@ -457,7 +482,6 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {/* MODAL HORARIO */}
       {amigoSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
