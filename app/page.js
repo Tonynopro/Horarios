@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import HorarioGrid from "@/components/HorarioGrid";
-import EditorHorarioManual from "@/components/EditorHorarioManual"; // Importamos el componente aparte
+import EditorHorarioManual from "@/components/EditorHorarioManual";
+import GuiaCSV from "@/components/GuiaCSV"; // Importamos el componente reutilizable
 import { transformarCSV, obtenerClaseActual } from "@/lib/parser";
 import {
   Users,
@@ -26,16 +27,16 @@ export default function HomePage() {
   const [amigosActivos, setAmigosActivos] = useState([]);
   const [viewId, setViewId] = useState("principal");
   const [showInfo, setShowInfo] = useState(false);
-  const [pasoSeleccion, setPasoSeleccion] = useState(null); // Para manejar los perfiles del JSON cargado
+  const [pasoSeleccion, setPasoSeleccion] = useState(null);
   const [mostrarAvisoOmitir, setMostrarAvisoOmitir] = useState(false);
-  const [showManual, setShowManual] = useState(false); // Controla el modal del editor manual
+  const [showManual, setShowManual] = useState(false);
 
   // --- CONSULTAS ---
   const miHorario = useLiveQuery(() =>
-    db.horarios.where({ esPrincipal: "true" }).first()
+    db.horarios.where({ esPrincipal: "true" }).first(),
   );
   const todosLosAmigos = useLiveQuery(() =>
-    db.horarios.where({ esPrincipal: "false" }).toArray()
+    db.horarios.where({ esPrincipal: "false" }).toArray(),
   );
   const totalPerfiles = useLiveQuery(() => db.horarios.count()) || 0;
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
@@ -43,7 +44,7 @@ export default function HomePage() {
   // --- FUNCIONES DE LÓGICA ---
   const toggleAmigo = (id) => {
     setAmigosActivos((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id],
     );
   };
 
@@ -103,7 +104,6 @@ export default function HomePage() {
     setPasoSeleccion(null);
   };
 
-  // --- GUARDADO DESDE EDITOR MANUAL ---
   const guardarDesdeEditor = async (data) => {
     await db.horarios.add({
       ...data,
@@ -124,7 +124,6 @@ export default function HomePage() {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 overflow-y-auto">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#00529b_1px,transparent_1px)] [background-size:16px_16px]" />
 
-        {/* SI EL USUARIO ELIGE CREAR A MANO, MOSTRAMOS EL COMPONENTE APARTE */}
         {showManual ? (
           <div
             className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
@@ -290,94 +289,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* MODAL INFO CSV */}
-        {showInfo && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in">
-            <div
-              className="absolute inset-0 bg-black/80"
-              onClick={() => setShowInfo(false)}
-            />
-            <div className="relative bg-card-bg w-full max-w-3xl rounded-[3rem] border border-white/10 p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar">
-              <div className="flex justify-between items-center mb-6 text-tec-blue">
-                <div className="flex items-center gap-2">
-                  <Info size={20} />
-                  <h3 className="text-lg font-black uppercase italic">
-                    Guía de Formato CSV
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setShowInfo(false)}
-                  className="p-2 bg-white/5 rounded-full text-white hover:rotate-90 transition-all"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="space-y-8">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500 tracking-widest">
-                    <TableIcon size={14} /> Formato Excel
-                  </div>
-                  <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-                    <table className="w-full text-left text-[8px] font-bold min-w-[600px]">
-                      <thead className="bg-tec-blue/10 text-tec-blue uppercase text-center">
-                        <tr>
-                          <th className="p-3 border-r border-white/5">Hora</th>
-                          <th className="p-3 border-r border-white/5">Lunes</th>
-                          <th className="p-3 border-r border-white/5">
-                            Martes
-                          </th>
-                          <th className="p-3 border-r border-white/5">
-                            Miércoles
-                          </th>
-                          <th className="p-3 border-r border-white/5">
-                            Jueves
-                          </th>
-                          <th className="p-3">Viernes</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-gray-300 text-center">
-                        <tr>
-                          <td className="p-3 border-b border-white/5 bg-white/5 italic font-mono">
-                            08:00-09:00
-                          </td>
-                          <td className="p-3 border-b border-r border-white/5">
-                            IA (LCA)
-                          </td>
-                          <td className="p-3 border-b border-r border-white/5">
-                            IA (LCA)
-                          </td>
-                          <td className="p-3 border-b border-r border-white/5">
-                            IA (LCA)
-                          </td>
-                          <td className="p-3 border-b border-r border-white/5 text-gray-600">
-                            ---
-                          </td>
-                          <td className="p-3 border-b border-white/5 text-gray-700">
-                            ---
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-500 tracking-widest">
-                    <FileType size={14} /> Ejemplo CSV
-                  </div>
-                  <div className="bg-black/40 p-4 rounded-xl font-mono text-[9px] text-tec-blue leading-relaxed border border-white/5 overflow-x-auto">
-                    Hora,Lunes,Martes,Miércoles,Jueves,Viernes
-                    <br />
-                    08:00 - 09:00,IA (LCA),IA (LCA),IA (LCA),,
-                  </div>
-                </div>
-                <p className="text-[10px] text-gray-400 text-center font-bold uppercase italic border-t border-white/5 pt-4">
-                  Importante: El salón debe estar entre{" "}
-                  <span className="text-white">paréntesis ( )</span>.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* MODAL INFO REEMPLAZADO POR COMPONENTE REUTILIZABLE */}
+        {showInfo && <GuiaCSV onClose={() => setShowInfo(false)} />}
       </div>
     );
   }
@@ -434,7 +347,7 @@ export default function HomePage() {
         <HorarioGrid
           horario={horarioAMostrar}
           compararCon={todosLosAmigos?.filter((a) =>
-            amigosActivos.includes(a.id)
+            amigosActivos.includes(a.id),
           )}
         />
       </div>

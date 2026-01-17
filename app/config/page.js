@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
+import GuiaCSV from "@/components/GuiaCSV"; // Importamos el nuevo componente
 import {
   FileUp,
   User,
@@ -45,7 +46,7 @@ export default function ConfigPage() {
       h.id &&
       h.nombreUsuario &&
       Array.isArray(h.materias) &&
-      h.materias.length > 0
+      h.materias.length > 0,
   );
 
   useEffect(() => {
@@ -64,7 +65,10 @@ export default function ConfigPage() {
       try {
         await Promise.all([db.horarios.clear(), db.perfil.clear()]);
         setStatus({ type: "success", msg: "Base de datos purgada." });
-        setTimeout(() => window.location.reload(), 1000);
+        //REENVIAR A PAGINA PRINCIPAL
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 1500);
       } catch (err) {
         setStatus({ type: "error", msg: "Error al limpiar: " + err.message });
       }
@@ -80,7 +84,6 @@ export default function ConfigPage() {
     setMostrarExportModal(true);
   };
 
-  // --- FUNCIÓN RESTAURADA ---
   const confirmarExportar = () => {
     const dataAExportar = todosLosHorarios
       .filter((h) => seleccionados.includes(h.id))
@@ -110,12 +113,16 @@ export default function ConfigPage() {
         const lista = Array.isArray(importados)
           ? importados
           : importados.horarios || [];
-        for (const h of lista) {
-          if (h && h.nombreUsuario && h.materias?.length > 0) {
-            await db.horarios.put({ ...h, esPrincipal: "false" });
-          }
+
+        const datosAInsertar = lista
+          .filter((h) => h && h.nombreUsuario && h.materias?.length > 0)
+          .map((h) => ({ ...h, esPrincipal: "false" }));
+
+        if (datosAInsertar.length > 0) {
+          await db.horarios.bulkPut(datosAInsertar);
         }
-        setPendientesConfig(lista.filter((h) => h.nombreUsuario));
+
+        setPendientesConfig(datosAInsertar);
         setStatus({ type: "success", msg: "Datos sincronizados." });
         topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (err) {
@@ -139,7 +146,7 @@ export default function ConfigPage() {
       await db.perfil.add({
         nombre: data.nombreUsuario,
         id: "usuario_principal",
-        actualizado: Date.now(),
+        updatedAt: Date.now(),
       });
       setShowManual(false);
       setStatus({ type: "success", msg: "Perfil actualizado." });
@@ -192,7 +199,6 @@ export default function ConfigPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-8">
-        {/* Identidad */}
         {pendientesConfig.length > 0 && (
           <section className="bg-tec-blue p-8 rounded-[2.5rem] shadow-2xl border border-white/20 animate-in slide-in-from-top-4">
             <h2 className="text-xl font-black uppercase text-white mb-4 flex items-center gap-2">
@@ -228,7 +234,6 @@ export default function ConfigPage() {
           </section>
         )}
 
-        {/* Perfil */}
         <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-3 text-tec-blue mb-6">
             <User size={24} />{" "}
@@ -284,7 +289,7 @@ export default function ConfigPage() {
                       try {
                         const data = transformarCSV(
                           ev.target.result,
-                          nombre || perfilActual?.nombre
+                          nombre || perfilActual?.nombre,
                         );
                         await db.horarios
                           .where({ esPrincipal: "true" })
@@ -312,7 +317,6 @@ export default function ConfigPage() {
           </div>
         </section>
 
-        {/* Datos */}
         <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-3 text-accent-purple mb-6 text-xl font-black uppercase tracking-tight text-white">
             <Share2 size={24} /> Respaldo
@@ -356,7 +360,6 @@ export default function ConfigPage() {
           </div>
         )}
 
-        {/* PURGAR */}
         <button
           onClick={borrarTodo}
           className="text-red-500/20 hover:text-red-500 font-black text-[10px] uppercase tracking-widest transition-all py-8 flex items-center justify-center gap-2"
@@ -365,80 +368,9 @@ export default function ConfigPage() {
         </button>
       </div>
 
-      {/* MODAL INFO */}
-      {showInfoModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in"
-          onClick={() => setShowInfoModal(false)}
-        >
-          <div
-            className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-8">
-              <div className="flex items-center gap-3 text-tec-blue">
-                <Info size={28} />
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">
-                  Guía de Formato
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="p-3 bg-white/5 rounded-full hover:rotate-90 transition-all text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                <TableIcon size={14} /> Vista Excel
-              </div>
-              <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-                <table className="w-full text-left text-[9px] font-bold min-w-[700px] text-center">
-                  <thead className="bg-tec-blue/10 text-tec-blue uppercase text-white font-black">
-                    <tr>
-                      <th className="p-3 border-r border-white/5">Hora</th>
-                      <th className="p-3 border-r border-white/5">Lunes</th>
-                      <th className="p-3 border-r border-white/5">Martes</th>
-                      <th className="p-3 border-r border-white/5">Miércoles</th>
-                      <th className="p-3 border-r border-white/5">Jueves</th>
-                      <th className="p-3">Viernes</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-gray-300">
-                    <tr>
-                      <td className="p-3 border-b border-white/5 bg-white/5 italic font-mono whitespace-nowrap">
-                        08:00 - 09:00
-                      </td>
-                      <td className="p-3 border-b border-r border-white/5">
-                        IA (LCA)
-                      </td>
-                      <td className="p-3 border-b border-r border-white/5">
-                        IA (LCA)
-                      </td>
-                      <td className="p-3 border-b border-r border-white/5">
-                        IA (LCA)
-                      </td>
-                      <td className="p-3 border-b border-r border-white/5">
-                        IA (LCA)
-                      </td>
-                      <td className="p-3 border-b border-white/5 text-gray-700">
-                        ---
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-[10px] text-gray-500 font-medium">
-                * Formato:{" "}
-                <span className="text-white font-bold">Materia (Salón)</span>.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* COMPONENTE DE GUÍA REUTILIZABLE */}
+      {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
-      {/* Modal Exportar */}
       {mostrarExportModal && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
@@ -462,7 +394,7 @@ export default function ConfigPage() {
                     setSeleccionados((prev) =>
                       prev.includes(h.id)
                         ? prev.filter((i) => i !== h.id)
-                        : [...prev, h.id]
+                        : [...prev, h.id],
                     )
                   }
                   className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${

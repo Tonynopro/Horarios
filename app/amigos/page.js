@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
 import HorarioGrid from "@/components/HorarioGrid";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
+import GuiaCSV from "@/components/GuiaCSV"; // Importamos el componente reutilizable
 import {
   FileUp,
   Users,
@@ -37,10 +38,10 @@ export default function AmigosPage() {
 
   // --- CONSULTAS REACTIVAS ---
   const amigos = useLiveQuery(() =>
-    db.horarios.where({ esPrincipal: "false" }).toArray()
+    db.horarios.where({ esPrincipal: "false" }).toArray(),
   );
   const miHorario = useLiveQuery(() =>
-    db.horarios.where({ esPrincipal: "true" }).first()
+    db.horarios.where({ esPrincipal: "true" }).first(),
   );
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
 
@@ -132,10 +133,10 @@ export default function AmigosPage() {
             const limAmigo = getLimites(amigo.materias, dia);
             if (!limBase || !limAmigo) return;
             const tBloqueIni = parseInt(
-              norm(rango).split("-")[0].replace(":", "")
+              norm(rango).split("-")[0].replace(":", ""),
             );
             const tBloqueFin = parseInt(
-              norm(rango).split("-")[1].replace(":", "")
+              norm(rango).split("-")[1].replace(":", ""),
             );
 
             if (
@@ -143,10 +144,10 @@ export default function AmigosPage() {
               tBloqueFin <= Math.min(limBase.salida, limAmigo.salida)
             ) {
               const baseOcupado = horarioBase.materias.some(
-                (m) => m.dia === dia && norm(m.rango) === norm(rango)
+                (m) => m.dia === dia && norm(m.rango) === norm(rango),
               );
               const amigoOcupado = amigo.materias.some(
-                (m) => m.dia === dia && norm(m.rango) === norm(rango)
+                (m) => m.dia === dia && norm(m.rango) === norm(rango),
               );
               if (!baseOcupado && !amigoOcupado)
                 diasLibresCompartidos.push(dia);
@@ -161,7 +162,7 @@ export default function AmigosPage() {
                       .slice(0, 2)
                       .toUpperCase()
                   : ""
-              } ${rango.split("-")[0]}`
+              } ${rango.split("-")[0]}`,
             );
         });
         break;
@@ -179,10 +180,10 @@ export default function AmigosPage() {
               const horaStr = horarioBase.materias.find(
                 (m) =>
                   m.dia === dia &&
-                  parseInt(m.inicio.replace(":", "")) === limB.entrada
+                  parseInt(m.inicio.replace(":", "")) === limB.entrada,
               ).inicio;
               coincidenciasCompactas.push(
-                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`
+                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`,
               );
             }
             if (
@@ -192,10 +193,10 @@ export default function AmigosPage() {
               const horaStr = horarioBase.materias.find(
                 (m) =>
                   m.dia === dia &&
-                  parseInt(m.fin.replace(":", "")) === limB.salida
+                  parseInt(m.fin.replace(":", "")) === limB.salida,
               ).fin;
               coincidenciasCompactas.push(
-                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`
+                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`,
               );
             }
           }
@@ -210,7 +211,7 @@ export default function AmigosPage() {
               (mm) =>
                 mm.dia === sm.dia &&
                 norm(mm.rango) === norm(sm.rango) &&
-                mm.salon.toLowerCase() === sm.salon.toLowerCase()
+                mm.salon.toLowerCase() === sm.salon.toLowerCase(),
             )
           ) {
             comunes.add(sm.nombre.toUpperCase());
@@ -233,7 +234,6 @@ export default function AmigosPage() {
 
   const resultadosFiltrados = (() => {
     let base = amigos ? [...amigos] : [];
-    // AGREGA AL USUARIO PRINCIPAL A LA LISTA DE RESULTADOS SI EL SUJETO BASE ES UN AMIGO
     if (idAmigoBase !== "yo" && miHorario) {
       base.push({
         ...miHorario,
@@ -242,7 +242,6 @@ export default function AmigosPage() {
       });
     }
     return base.filter((item) => {
-      // Excluye al que está seleccionado como Base
       if (
         item.id === idAmigoBase ||
         (idAmigoBase === "yo" && item.id === "yo_temp")
@@ -499,95 +498,8 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {showInfoModal && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in"
-          onClick={() => setShowInfoModal(false)}
-        >
-          <div
-            className="relative bg-card-bg w-full max-w-4xl rounded-[3rem] border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-8 text-tec-blue">
-              <div className="flex items-center gap-3">
-                <Info size={28} />
-                <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white">
-                  Guía de Formato
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="p-3 bg-white/5 rounded-full hover:rotate-90 transition-all text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-8 text-left">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                  <TableIcon size={14} /> Vista Excel
-                </div>
-                <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02]">
-                  <table className="w-full text-[9px] font-bold min-w-[600px] text-center">
-                    <thead className="bg-tec-blue/10 text-tec-blue uppercase text-white">
-                      <tr>
-                        <th className="p-3 border-r border-white/5">Hora</th>
-                        <th className="p-3 border-r border-white/5">Lunes</th>
-                        <th className="p-3 border-r border-white/5">Martes</th>
-                        <th className="p-3 border-r border-white/5">
-                          Miércoles
-                        </th>
-                        <th className="p-3 border-r border-white/5">Jueves</th>
-                        <th className="p-3">Viernes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-gray-300">
-                      <tr>
-                        <td className="p-3 border-b border-white/5 bg-white/5 italic font-mono whitespace-nowrap">
-                          08:00 - 09:00
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          IA (LCA)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          IA (LCA)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          IA (LCA)
-                        </td>
-                        <td className="p-3 border-b border-r border-white/5">
-                          IA (LCA)
-                        </td>
-                        <td className="p-3 border-b border-white/5 text-gray-700">
-                          ---
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-[10px] text-gray-500 font-medium">
-                  * Formato:{" "}
-                  <span className="text-white font-bold">Materia (Salón)</span>.
-                  Paréntesis obligatorios.
-                </p>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-gray-400 tracking-widest">
-                  <FileType size={14} /> Estructura CSV
-                </div>
-                <div className="bg-black/40 p-5 rounded-2xl border border-white/5 font-mono text-[10px] text-tec-blue leading-relaxed overflow-x-auto">
-                  <span className="text-gray-500 font-bold uppercase">
-                    Hora,Lunes,Martes,Miércoles,Jueves,Viernes
-                  </span>
-                  <br />
-                  08:00 - 09:00,IA (LCA),IA (LCA),IA (LCA),IA (LCA), <br />
-                  10:00 - 11:00,Prog Web (FF1),,Prog Web (FF1),,Prog Web (LR)
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* COMPONENTE DE GUÍA REUTILIZABLE */}
+      {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
       {amigoSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
