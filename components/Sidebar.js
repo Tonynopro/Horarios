@@ -44,9 +44,43 @@ export default function Sidebar() {
 
   useEffect(() => {
     setMounted(true);
-    setAhora(new Date());
-    const timer = setInterval(() => setAhora(new Date()), 60000);
-    return () => clearInterval(timer);
+
+    setMounted(true);
+
+    // Solicitar permiso de notificaciones al cargar
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
+    const actualizarTodo = () => {
+      setAhora(new Date());
+    };
+
+    actualizarTodo(); // Ejecución inmediata al cargar
+
+    // FUNCIÓN MÁGICA DE SINCRONIZACIÓN
+    const sincronizar = () => {
+      const ahoraMismo = new Date();
+      // Calculamos cuántos milisegundos faltan para el segundo 0 del siguiente minuto
+      const msParaElSiguienteMinuto =
+        1000 -
+        ahoraMismo.getMilliseconds() +
+        (59 - ahoraMismo.getSeconds()) * 1000;
+
+      setTimeout(() => {
+        actualizarTodo(); // Esto ocurrirá exactamente al segundo :00
+        // Una vez sincronizados, repetimos cada minuto
+        setInterval(actualizarTodo, 60000);
+      }, msParaElSiguienteMinuto);
+    };
+
+    sincronizar();
+
+    return () => {
+      // Limpieza de timers para evitar fugas de memoria
+      const ids = setTimeout(() => {});
+      for (let i = 0; i < ids; i++) clearTimeout(i);
+    };
   }, []);
 
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
@@ -96,6 +130,24 @@ export default function Sidebar() {
         })
         .filter(Boolean)
     : [];
+
+  useEffect(() => {
+    // Solo si hay una clase y el navegador soporta Service Workers
+    if (claseHoy && "serviceWorker" in navigator) {
+      navigator.serviceWorker.ready.then((registration) => {
+        // Enviamos la info de la clase al sw.js
+        registration.active.postMessage({
+          type: "NUEVA_CLASE",
+          payload: {
+            nombre: claseHoy.nombre,
+            salon: claseHoy.salon,
+            profesor: claseHoy.profesor || "No asignado",
+            rango: formatearRango(claseHoy.rango, formatoHora),
+          },
+        });
+      });
+    }
+  }, [claseHoy?.nombre, claseHoy?.rango]); // Solo se dispara cuando cambia la clase
 
   const menuItems = [
     { icon: <Home size={20} />, label: "Mi Horario", href: "/" },
