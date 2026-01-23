@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
-import GuiaCSV from "@/components/GuiaCSV"; // Importamos el nuevo componente
+import GuiaCSV from "@/components/GuiaCSV";
 import {
   FileUp,
   User,
@@ -15,12 +15,10 @@ import {
   CheckSquare,
   Square,
   RefreshCcw,
-  BookMarked,
   Info,
-  Table as TableIcon,
-  FileType,
   Keyboard,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 
@@ -60,12 +58,21 @@ export default function ConfigPage() {
     }
   }, [status.msg]);
 
+  const cambiarFormatoHora = async (formato) => {
+    if (!perfilActual) return;
+    try {
+      await db.perfil.update(perfilActual.id, { formatoHora: formato });
+      setStatus({ type: "success", msg: `Formato cambiado a ${formato}h` });
+    } catch (err) {
+      setStatus({ type: "error", msg: "Error al cambiar formato" });
+    }
+  };
+
   const borrarTodo = async () => {
     if (confirm("¿Estás seguro? Esto eliminará físicamente TODOS los datos.")) {
       try {
         await Promise.all([db.horarios.clear(), db.perfil.clear()]);
         setStatus({ type: "success", msg: "Base de datos purgada." });
-        //REENVIAR A PAGINA PRINCIPAL
         setTimeout(() => {
           window.location.href = "/";
         }, 1500);
@@ -142,11 +149,13 @@ export default function ConfigPage() {
         esPrincipal: "true",
         id: `me_${Date.now()}`,
       });
+      const currentFormat = perfilActual?.formatoHora || 24;
       await db.perfil.clear();
       await db.perfil.add({
         nombre: data.nombreUsuario,
         id: "usuario_principal",
         updatedAt: Date.now(),
+        formatoHora: currentFormat,
       });
       setShowManual(false);
       setStatus({ type: "success", msg: "Perfil actualizado." });
@@ -213,11 +222,13 @@ export default function ConfigPage() {
                       .where({ esPrincipal: "true" })
                       .modify({ esPrincipal: "false" });
                     await db.horarios.update(h.id, { esPrincipal: "true" });
+                    const currentFormat = perfilActual?.formatoHora || 24;
                     await db.perfil.clear();
                     await db.perfil.add({
                       nombre: h.nombreUsuario,
                       id: "usuario_principal",
                       actualizado: Date.now(),
+                      formatoHora: currentFormat,
                     });
                     setPendientesConfig([]);
                     setStatus({
@@ -236,7 +247,7 @@ export default function ConfigPage() {
 
         <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-3 text-tec-blue mb-6">
-            <User size={24} />{" "}
+            <User size={24} />
             <h2 className="text-xl font-black uppercase tracking-tight text-white">
               Mi Perfil
             </h2>
@@ -253,6 +264,29 @@ export default function ConfigPage() {
                 className="w-full bg-white/5 p-4 rounded-2xl border border-white/10 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
               />
             </div>
+
+            {/* NUEVA SECCIÓN: FORMATO DE HORA */}
+            <div>
+              <p className="text-[10px] font-black uppercase text-gray-500 ml-2 mb-2 tracking-widest flex items-center gap-2">
+                <Clock size={12} /> Visualización de Tiempo
+              </p>
+              <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+                {[12, 24].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => cambiarFormatoHora(f)}
+                    className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${
+                      (perfilActual?.formatoHora || 24) === f
+                        ? "bg-tec-blue text-white shadow-lg scale-[1.02]"
+                        : "text-gray-500 hover:text-white"
+                    }`}
+                  >
+                    {f} Horas
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => setShowManual(true)}
@@ -295,11 +329,13 @@ export default function ConfigPage() {
                           .where({ esPrincipal: "true" })
                           .delete();
                         await db.horarios.add({ ...data, esPrincipal: "true" });
+                        const currentFormat = perfilActual?.formatoHora || 24;
                         await db.perfil.clear();
                         await db.perfil.add({
                           nombre: nombre || perfilActual?.nombre,
                           id: "usuario_principal",
                           actualizado: Date.now(),
+                          formatoHora: currentFormat,
                         });
                         setStatus({
                           type: "success",
@@ -368,7 +404,6 @@ export default function ConfigPage() {
         </button>
       </div>
 
-      {/* COMPONENTE DE GUÍA REUTILIZABLE */}
       {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
       {mostrarExportModal && (

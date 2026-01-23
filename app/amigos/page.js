@@ -2,10 +2,10 @@
 import { useState, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
-import { transformarCSV } from "@/lib/parser";
+import { transformarCSV, formatearRango } from "@/lib/parser";
 import HorarioGrid from "@/components/HorarioGrid";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
-import GuiaCSV from "@/components/GuiaCSV"; // Importamos el componente reutilizable
+import GuiaCSV from "@/components/GuiaCSV";
 import {
   FileUp,
   Users,
@@ -16,8 +16,6 @@ import {
   Edit3,
   Trash2,
   Info,
-  Table as TableIcon,
-  FileType,
   Keyboard,
   Coffee,
   DoorOpen,
@@ -44,6 +42,7 @@ export default function AmigosPage() {
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
+  const formatoHora = perfil?.formatoHora || 24;
 
   const bloquesTec = [
     "07:00-08:00",
@@ -64,7 +63,6 @@ export default function AmigosPage() {
   ];
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
 
-  // --- LÓGICA DE GUARDADO ---
   const guardarDesdeEditor = async (data) => {
     if (editandoAmigo) {
       await db.horarios.update(editandoAmigo.id, {
@@ -81,7 +79,6 @@ export default function AmigosPage() {
     }
     setShowManual(false);
     setNombre("");
-    alert("Guardado correctamente");
   };
 
   const manejarSubidaCSV = async (e) => {
@@ -98,7 +95,6 @@ export default function AmigosPage() {
           id: `amigo_${Date.now()}`,
         });
         setNombre("");
-        alert("Amigo añadido.");
       } catch (err) {
         alert("Error de formato.");
       }
@@ -106,21 +102,28 @@ export default function AmigosPage() {
     reader.readAsText(file);
   };
 
-  // --- LÓGICA DE FILTROS INTELIGENTE ---
+  // --- LÓGICA DE FILTROS BLINDADA ---
   const obtenerDetalleFiltro = (amigo) => {
     const horarioBase =
       idAmigoBase === "yo"
         ? miHorario
         : amigos?.find((a) => a.id === idAmigoBase);
-    if (!horarioBase) return null;
+
+    if (!horarioBase || !amigo) return null;
+
     const coincidenciasCompactas = [];
-    const norm = (r) => r.replace(/\s/g, "");
+    const norm = (r) => (r || "").replace(/\s/g, "");
 
     const getLimites = (mats, dia) => {
+      if (!mats) return null;
       const diaMats = mats.filter((m) => m.dia === dia);
       if (diaMats.length === 0) return null;
-      const mins = diaMats.map((m) => parseInt(m.inicio.replace(":", "")));
-      const maxs = diaMats.map((m) => parseInt(m.fin.replace(":", "")));
+      const mins = diaMats.map((m) =>
+        parseInt((m.inicio || "0").replace(":", "")),
+      );
+      const maxs = diaMats.map((m) =>
+        parseInt((m.fin || "0").replace(":", "")),
+      );
       return { entrada: Math.min(...mins), salida: Math.max(...maxs) };
     };
 
@@ -132,11 +135,14 @@ export default function AmigosPage() {
             const limBase = getLimites(horarioBase.materias, dia);
             const limAmigo = getLimites(amigo.materias, dia);
             if (!limBase || !limAmigo) return;
+
             const tBloqueIni = parseInt(
               norm(rango).split("-")[0].replace(":", ""),
+              10,
             );
             const tBloqueFin = parseInt(
               norm(rango).split("-")[1].replace(":", ""),
+              10,
             );
 
             if (
@@ -153,17 +159,15 @@ export default function AmigosPage() {
                 diasLibresCompartidos.push(dia);
             }
           });
-          if (diasLibresCompartidos.length > 0)
+          if (diasLibresCompartidos.length > 0) {
+            const horaInicioDoc = rango.split("-")[0];
+            const horaFormateada = formatearRango(rango, formatoHora)
+              .split("-")[0]
+              .trim();
             coincidenciasCompactas.push(
-              `${diasLibresCompartidos[0].slice(0, 2).toUpperCase()}${
-                diasLibresCompartidos.length > 1
-                  ? "-" +
-                    diasLibresCompartidos[diasLibresCompartidos.length - 1]
-                      .slice(0, 2)
-                      .toUpperCase()
-                  : ""
-              } ${rango.split("-")[0]}`,
+              `${diasLibresCompartidos[0].slice(0, 2).toUpperCase()} ${horaFormateada}`,
             );
+          }
         });
         break;
 
@@ -177,27 +181,29 @@ export default function AmigosPage() {
               filtroActivo === "entrada_comun" &&
               limB.entrada === limA.entrada
             ) {
-              const horaStr = horarioBase.materias.find(
+              const mat = horarioBase.materias.find(
                 (m) =>
                   m.dia === dia &&
                   parseInt(m.inicio.replace(":", "")) === limB.entrada,
-              ).inicio;
-              coincidenciasCompactas.push(
-                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`,
               );
+              if (mat)
+                coincidenciasCompactas.push(
+                  `${dia.slice(0, 2).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[0]}`,
+                );
             }
             if (
               filtroActivo === "salida_comun" &&
               limB.salida === limA.salida
             ) {
-              const horaStr = horarioBase.materias.find(
+              const mat = horarioBase.materias.find(
                 (m) =>
                   m.dia === dia &&
                   parseInt(m.fin.replace(":", "")) === limB.salida,
-              ).fin;
-              coincidenciasCompactas.push(
-                `${dia.slice(0, 2).toUpperCase()} @ ${horaStr}`,
               );
+              if (mat)
+                coincidenciasCompactas.push(
+                  `${dia.slice(0, 2).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[1]}`,
+                );
             }
           }
         });
@@ -325,7 +331,7 @@ export default function AmigosPage() {
             <Keyboard size={16} /> Registro Manual
           </button>
           <label className="flex-1 py-4 bg-tec-blue text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:bg-blue-600 transition-all">
-            <FileUp size={16} /> IMPORTAR CSV{" "}
+            <FileUp size={16} /> IMPORTAR CSV
             <input
               type="file"
               className="hidden"
@@ -343,11 +349,7 @@ export default function AmigosPage() {
           </span>
           <button
             onClick={() => setIdAmigoBase("yo")}
-            className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${
-              idAmigoBase === "yo"
-                ? "bg-tec-blue text-white shadow-lg"
-                : "bg-white/5 text-gray-500"
-            }`}
+            className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${idAmigoBase === "yo" ? "bg-tec-blue text-white shadow-lg" : "bg-white/5 text-gray-500"}`}
           >
             MI HORARIO
           </button>
@@ -355,11 +357,7 @@ export default function AmigosPage() {
             <button
               key={a.id}
               onClick={() => setIdAmigoBase(a.id)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all ${
-                idAmigoBase === a.id
-                  ? "bg-accent-purple text-white shadow-lg"
-                  : "bg-white/5 text-gray-500"
-              }`}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all ${idAmigoBase === a.id ? "bg-accent-purple text-white shadow-lg" : "bg-white/5 text-gray-500"}`}
             >
               {a.nombreUsuario.toUpperCase()}
             </button>
@@ -392,11 +390,7 @@ export default function AmigosPage() {
             <button
               key={f.id}
               onClick={() => setFiltroActivo(f.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
-                filtroActivo === f.id
-                  ? "bg-white text-black border-white shadow-xl"
-                  : "bg-white/5 text-gray-500 border-white/5"
-              }`}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${filtroActivo === f.id ? "bg-white text-black border-white shadow-xl" : "bg-white/5 text-gray-500 border-white/5"}`}
             >
               {f.icon} {f.label}
             </button>
@@ -404,60 +398,44 @@ export default function AmigosPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {resultadosFiltrados.map((amigo) => {
-            const detalles = obtenerDetalleFiltro(amigo);
-            return (
-              <div
-                key={amigo.id}
-                onClick={() => setAmigoSeleccionado(amigo)}
-                className={`p-6 border rounded-[2.5rem] shadow-xl flex flex-col min-h-[160px] transition-all cursor-pointer hover:scale-[1.02] ${
-                  amigo.id === "yo_temp"
-                    ? "bg-tec-blue/10 border-tec-blue/30"
-                    : "bg-card-bg border-white/5"
-                }`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${
-                      amigo.id === "yo_temp"
-                        ? "bg-tec-blue text-white"
-                        : "bg-tec-blue/10 text-tec-blue"
-                    }`}
-                  >
-                    {amigo.nombreUsuario[0]}
-                  </div>
-                  <div className="text-[8px] font-black text-gray-500 uppercase">
-                    Coincidencia
-                  </div>
+          {resultadosFiltrados.map((amigo) => (
+            <div
+              key={amigo.id}
+              onClick={() => setAmigoSeleccionado(amigo)}
+              className={`p-6 border rounded-[2.5rem] shadow-xl flex flex-col min-h-[160px] transition-all cursor-pointer hover:scale-[1.02] ${amigo.id === "yo_temp" ? "bg-tec-blue/10 border-tec-blue/30" : "bg-card-bg border-white/5"}`}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${amigo.id === "yo_temp" ? "bg-tec-blue text-white" : "bg-tec-blue/10 text-tec-blue"}`}
+                >
+                  {amigo.nombreUsuario[0]}
                 </div>
-                <h3 className="text-lg font-black italic uppercase truncate">
-                  {amigo.nombreUsuario}
-                </h3>
-                <div className="mt-3 flex flex-wrap gap-1">
-                  {detalles?.map((d, i) => (
-                    <span
-                      key={i}
-                      className="bg-white/5 border border-white/10 text-[8px] px-2 py-1 rounded-lg text-tec-blue font-bold"
-                    >
-                      {d}
-                    </span>
-                  ))}
+                <div className="text-[8px] font-black text-gray-500 uppercase">
+                  Coincidencia
                 </div>
               </div>
-            );
-          })}
+              <h3 className="text-lg font-black italic uppercase truncate">
+                {amigo.nombreUsuario}
+              </h3>
+              <div className="mt-3 flex flex-wrap gap-1">
+                {obtenerDetalleFiltro(amigo)?.map((d, i) => (
+                  <span
+                    key={i}
+                    className="bg-white/5 border border-white/10 text-[8px] px-2 py-1 rounded-lg text-tec-blue font-bold"
+                  >
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      <section className="pt-16 border-t border-white/5 space-y-8">
-        <div className="text-center space-y-2">
-          <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
-            Directorio de Red
-          </h2>
-          <p className="text-[9px] text-gray-700 font-bold uppercase italic">
-            Edita o elimina perfiles desde aquí
-          </p>
-        </div>
+      <section className="pt-16 border-t border-white/5 space-y-8 text-center">
+        <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
+          Directorio de Red
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {amigos?.map((amigo) => (
             <div
@@ -498,7 +476,6 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {/* COMPONENTE DE GUÍA REUTILIZABLE */}
       {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
       {amigoSeleccionado && (

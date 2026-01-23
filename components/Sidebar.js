@@ -14,14 +14,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
-import { obtenerClaseActual } from "@/lib/parser";
+import { obtenerClaseActual, formatearRango } from "@/lib/parser";
 import { useEffect, useState } from "react";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [ahora, setAhora] = useState(null);
-  const [amigoTooltip, setAmigoTooltip] = useState(null);
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
 
   const bloquesTec = [
@@ -49,7 +48,10 @@ export default function Sidebar() {
     return () => clearInterval(timer);
   }, []);
 
+  // --- CONSULTAS REACTIVAS ---
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
+  const formatoHora = perfil?.formatoHora || 24;
+
   const horario = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
@@ -64,7 +66,7 @@ export default function Sidebar() {
     ? ahora.getHours() < 7 || ahora.getHours() >= 22
     : true;
 
-  const rangoActualSistema = ahora
+  const rangoActualRaw = ahora
     ? bloquesTec.find((bloque) => {
         const [inicio, fin] = bloque.split(" - ");
         return (
@@ -74,11 +76,17 @@ export default function Sidebar() {
       }) || "Fuera de bloque"
     : "---";
 
+  // CORRECCIÓN AQUÍ: Usamos rangoActualRaw directamente y agregamos un fallback
+  const rangoActualSistema = formatearRango(
+    rangoActualRaw || "---",
+    formatoHora,
+  );
+
   const amigosEnClaseAhora = ahora
-    ? amigos
-        ?.map((amigo) => {
+    ? (amigos || [])
+        .map((amigo) => {
           const suClase = obtenerClaseActual(amigo.materias);
-          const rangoBuscado = claseHoy?.rango || rangoActualSistema;
+          const rangoBuscado = claseHoy?.rango || rangoActualRaw;
           if (suClase && suClase.rango === rangoBuscado) {
             const esMismaClase =
               claseHoy &&
@@ -88,7 +96,7 @@ export default function Sidebar() {
           }
           return null;
         })
-        .filter(Boolean) || []
+        .filter(Boolean)
     : [];
 
   const menuItems = [
@@ -100,7 +108,6 @@ export default function Sidebar() {
   const tieneContenido =
     (claseHoy || amigosEnClaseAhora.length > 0) && !estaCerrado;
 
-  // Si no está montado, devolvemos una estructura mínima idéntica a la raíz del render final
   if (!mounted) {
     return <aside className="md:w-72 bg-card-bg h-screen" />;
   }
@@ -149,10 +156,12 @@ export default function Sidebar() {
             />
             <div className="relative bg-card-bg border-t border-white/10 rounded-t-[2.5rem] p-6 pb-10 animate-in slide-in-from-bottom-full duration-300">
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-6" />
-              <header className="flex justify-between items-start mb-6">
+              <header className="flex justify-between items-center mb-6">
                 <div>
                   <h3 className="text-2xl font-black italic text-white uppercase leading-none">
-                    {claseHoy?.rango || rangoActualSistema}
+                    {claseHoy
+                      ? formatearRango(claseHoy.rango, formatoHora)
+                      : rangoActualSistema}
                   </h3>
                   {claseHoy && (
                     <>
@@ -250,7 +259,7 @@ export default function Sidebar() {
           </div>
           <p
             suppressHydrationWarning
-            className="text-xl font-mono font-black text-white/80"
+            className="text-lg font-mono font-black text-white/80"
           >
             {estaCerrado ? "CERRADO" : rangoActualSistema}
           </p>
@@ -291,8 +300,8 @@ export default function Sidebar() {
           </div>
           {tieneContenido && claseHoy && (
             <div>
-              <p className="text-xl font-black leading-tight text-white">
-                {claseHoy.rango}
+              <p className="text-lg font-black leading-tight text-white">
+                {formatearRango(claseHoy.rango, formatoHora)}
               </p>
               <p className="text-xs text-gray-400 font-bold uppercase mt-1 italic">
                 {claseHoy.nombre}

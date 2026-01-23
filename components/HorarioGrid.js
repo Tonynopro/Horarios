@@ -2,8 +2,15 @@
 import React, { Fragment } from "react";
 import MateriaCard from "./MateriaCard";
 import { MapPin } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+import { formatearRango } from "@/lib/parser";
 
 export default function HorarioGrid({ horario, compararCon = [] }) {
+  // --- CONSULTA DE PREFERENCIAS ---
+  const perfil = useLiveQuery(() => db.perfil.toCollection().first());
+  const formatoHora = perfil?.formatoHora || 24;
+
   if (!horario || !horario.materias) {
     return (
       <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-white/10 rounded-3xl">
@@ -14,7 +21,7 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
 
   const dias = ["lunes", "martes", "miercoles", "jueves", "viernes"];
 
-  // Consolidamos todas las horas posibles del sistema
+  // Consolidamos todas las horas posibles del sistema (manteniendo formato 24h para el sort)
   const todasLasMaterias = [
     ...horario.materias,
     ...compararCon.flatMap((amigo) => amigo.materias),
@@ -41,21 +48,21 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
         {/* Generación de Filas por Hora */}
         {horasUnicas.map((rango) => (
           <Fragment key={rango}>
-            {/* Columna Lateral de Hora */}
-            <div className="flex items-center justify-center text-[10px] font-mono font-bold text-gray-400 bg-white/5 rounded-2xl border border-white/5 py-4 shadow-inner">
-              {rango}
+            {/* Columna Lateral de Hora (Aquí aplicamos el formato 12/24) */}
+            <div className="flex items-center justify-center text-[9px] font-mono font-bold text-gray-400 bg-white/5 rounded-2xl border border-white/5 py-4 shadow-inner px-2 text-center leading-tight">
+              {formatearRango(rango, formatoHora)}
             </div>
 
             {/* Celdas de Materias */}
             {dias.map((dia) => {
               // 1. Tu materia en este bloque
               const miMateria = horario.materias.find(
-                (m) => m.dia === dia && m.rango === rango
+                (m) => m.dia === dia && m.rango === rango,
               );
 
-              // 2. Amigos que tienen clase en este bloque (aunque tú no tengas)
+              // 2. Amigos que tienen clase en este bloque
               const amigosEnEsteBloque = compararCon.filter((amigo) =>
-                amigo.materias.some((m) => m.dia === dia && m.rango === rango)
+                amigo.materias.some((m) => m.dia === dia && m.rango === rango),
               );
 
               return (
@@ -64,7 +71,6 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
                   className="min-h-[110px] relative group"
                 >
                   {miMateria ? (
-                    /* Si tienes clase, pasamos los amigos para que MateriaCard los rinda con brillo si coinciden */
                     <MateriaCard
                       materia={miMateria}
                       amigosAca={amigosEnEsteBloque}
@@ -76,11 +82,11 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
                         Libre
                       </span>
 
-                      {/* BURBUJAS CUANDO TÚ TIENES LIBRE PERO ELLOS NO */}
+                      {/* BURBUJAS DE AMIGOS */}
                       <div className="absolute -bottom-1 -right-1 flex -space-x-2 p-1">
                         {amigosEnEsteBloque.map((amigo, idx) => {
                           const suMateria = amigo.materias.find(
-                            (m) => m.dia === dia && m.rango === rango
+                            (m) => m.dia === dia && m.rango === rango,
                           );
                           return (
                             <div
@@ -98,8 +104,8 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
                                 {amigo.nombreUsuario.charAt(0)}
                               </div>
 
-                              {/* TOOLTIP EMERGENTE PARA ESPACIO LIBRE */}
-                              <div className="absolute bottom-full right-0 mb-2 w-44 p-3 bg-card-bg border border-white/10 rounded-2xl shadow-2xl opacity-0 scale-90 pointer-events-none group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100 transition-all z-[100]">
+                              {/* TOOLTIP EMERGENTE */}
+                              <div className="absolute bottom-full right-0 mb-2 w-44 p-3 bg-card-bg border border-white/10 rounded-2xl shadow-2xl opacity-0 scale-90 pointer-events-none group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100 transition-all z-[100] backdrop-blur-md">
                                 <p className="text-[10px] font-black text-accent-purple uppercase tracking-tighter">
                                   {amigo.nombreUsuario}
                                 </p>
