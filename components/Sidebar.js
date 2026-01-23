@@ -48,7 +48,6 @@ export default function Sidebar() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- CONSULTAS REACTIVAS ---
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
   const formatoHora = perfil?.formatoHora || 24;
 
@@ -59,7 +58,6 @@ export default function Sidebar() {
     db.horarios.where({ esPrincipal: "false" }).toArray(),
   );
 
-  // Lógica de cálculos segura
   const claseHoy = ahora ? obtenerClaseActual(horario?.materias) : null;
   const horaActualNum = ahora ? ahora.getHours() * 100 + ahora.getMinutes() : 0;
   const estaCerrado = ahora
@@ -76,7 +74,6 @@ export default function Sidebar() {
       }) || "Fuera de bloque"
     : "---";
 
-  // CORRECCIÓN AQUÍ: Usamos rangoActualRaw directamente y agregamos un fallback
   const rangoActualSistema = formatearRango(
     rangoActualRaw || "---",
     formatoHora,
@@ -108,18 +105,51 @@ export default function Sidebar() {
   const tieneContenido =
     (claseHoy || amigosEnClaseAhora.length > 0) && !estaCerrado;
 
-  if (!mounted) {
-    return <aside className="md:w-72 bg-card-bg h-screen" />;
-  }
+  // Componente Reutilizable para la tarjeta de amigo
+  const FriendCard = ({ amigo }) => (
+    <div
+      className={`p-3 rounded-2xl border transition-all duration-300 ${
+        amigo.esMismaClase
+          ? "bg-green-500/10 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.1)]"
+          : "bg-white/[0.03] border-white/5"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2 overflow-hidden">
+          {amigo.esMismaClase && (
+            <CheckCircle2
+              size={12}
+              className="text-green-500 shrink-0 animate-pulse"
+            />
+          )}
+          <p
+            className={`text-[11px] font-black uppercase truncate ${amigo.esMismaClase ? "text-green-400" : "text-white/90"}`}
+          >
+            {amigo.nombreUsuario.split(" ")[0]}
+          </p>
+        </div>
+        <p
+          className={`text-[9px] font-black shrink-0 ${amigo.esMismaClase ? "text-green-500" : "text-tec-blue"}`}
+        >
+          S: {amigo.claseActual.salon}
+        </p>
+      </div>
+      <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
+        {amigo.claseActual.nombre}
+      </p>
+    </div>
+  );
+
+  if (!mounted) return <aside className="md:w-72 bg-card-bg h-screen" />;
 
   return (
     <aside className="contents">
-      {/* MOBILE UI */}
+      {/* --- UI MÓVIL --- */}
       <div className="md:hidden">
         {tieneContenido && (
           <div
             onClick={() => setShowMobileDrawer(true)}
-            className="fixed bottom-20 left-4 right-4 bg-card-bg/95 border border-tec-blue/40 p-3 rounded-2xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 z-[45] backdrop-blur-md active:scale-95 transition-all"
+            className="fixed bottom-20 left-4 right-4 bg-card-bg/95 border border-tec-blue/40 p-3 rounded-2xl shadow-2xl flex items-center justify-between z-[45] backdrop-blur-md active:scale-95 transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -154,7 +184,7 @@ export default function Sidebar() {
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setShowMobileDrawer(false)}
             />
-            <div className="relative bg-card-bg border-t border-white/10 rounded-t-[2.5rem] p-6 pb-10 animate-in slide-in-from-bottom-full duration-300">
+            <div className="relative bg-card-bg border-t border-white/10 rounded-t-[2.5rem] p-6 pb-10 animate-in slide-in-from-bottom-full">
               <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-6" />
               <header className="flex justify-between items-center mb-6">
                 <div>
@@ -165,7 +195,7 @@ export default function Sidebar() {
                   </h3>
                   {claseHoy && (
                     <>
-                      <p className="text-tec-blue font-bold text-sm mt-1 uppercase tracking-tight">
+                      <p className="text-tec-blue font-bold text-sm mt-1 uppercase">
                         {claseHoy.nombre}
                       </p>
                       <div className="flex items-center gap-1 mt-2 text-gray-500 text-[10px] font-black">
@@ -181,27 +211,9 @@ export default function Sidebar() {
                   <X size={20} />
                 </button>
               </header>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 max-h-[40vh] overflow-y-auto no-scrollbar">
                 {amigosEnClaseAhora.map((amigo) => (
-                  <div
-                    key={amigo.id}
-                    className={`p-3 rounded-2xl border ${amigo.esMismaClase ? "bg-green-500/10 border-green-500/30" : "bg-white/5 border-white/5"}`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      {amigo.esMismaClase && (
-                        <CheckCircle2 size={12} className="text-green-500" />
-                      )}
-                      <p className="text-xs font-black uppercase truncate">
-                        {amigo.nombreUsuario.split(" ")[0]}
-                      </p>
-                    </div>
-                    <p className="text-[8px] text-gray-500 font-bold uppercase truncate">
-                      {amigo.claseActual.nombre}
-                    </p>
-                    <p className="text-[8px] text-tec-blue font-black mt-1">
-                      S: {amigo.claseActual.salon}
-                    </p>
-                  </div>
+                  <FriendCard key={amigo.id} amigo={amigo} />
                 ))}
               </div>
             </div>
@@ -221,7 +233,7 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* DESKTOP SIDEBAR */}
+      {/* --- SIDEBAR ESCRITORIO --- */}
       <aside className="w-72 bg-card-bg border-r border-white/5 flex flex-col p-6 hidden md:flex h-screen sticky top-0 overflow-y-auto no-scrollbar">
         <div className="mb-8">
           <h2 className="text-tec-blue font-black text-2xl tracking-tighter italic uppercase">
@@ -265,7 +277,7 @@ export default function Sidebar() {
           </p>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        <nav className="space-y-2 mb-8">
           {menuItems.map((item) => (
             <Link
               key={item.href}
@@ -278,8 +290,23 @@ export default function Sidebar() {
           ))}
         </nav>
 
+        {/* SECCIÓN DE AMIGOS EN ESCRITORIO */}
+        {!estaCerrado && amigosEnClaseAhora.length > 0 && (
+          <div className="mb-8">
+            <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
+              <Users size={12} /> Amigos en Clase
+            </p>
+            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
+              {amigosEnClaseAhora.map((amigo) => (
+                <FriendCard key={amigo.id} amigo={amigo} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PIE DE SIDEBAR: TU CLASE */}
         <div
-          className={`mt-auto p-5 rounded-[2.2rem] border transition-all relative ${tieneContenido ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40" : "bg-white/[0.02] border-white/5"}`}
+          className={`mt-auto p-5 rounded-[2.2rem] border transition-all relative ${tieneContenido && claseHoy ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40" : "bg-white/[0.02] border-white/5"}`}
         >
           <div className="flex items-center gap-2 mb-3">
             <Zap
@@ -293,12 +320,10 @@ export default function Sidebar() {
                 ? "Fuera de Horario"
                 : claseHoy
                   ? "En Clase"
-                  : amigosEnClaseAhora.length > 0
-                    ? "Red en Clase"
-                    : "Libre"}
+                  : "Libre"}
             </span>
           </div>
-          {tieneContenido && claseHoy && (
+          {claseHoy && (
             <div>
               <p className="text-lg font-black leading-tight text-white">
                 {formatearRango(claseHoy.rango, formatoHora)}
