@@ -7,35 +7,68 @@ import {
   Clock,
   Trash2,
   AlertCircle,
-  Check,
   BookOpen,
   MapPin,
+  User, // Nuevo icono para el profesor
 } from "lucide-react";
 
 export default function EditorHorarioManual({
   onSave,
   onCancel,
   nombreInicial = "",
+  materiasIniciales = [], // <-- Prop añadida para cargar datos existentes
 }) {
   const [nombre, setNombre] = useState(nombreInicial);
-  const [materias, setMaterias] = useState([]); // Lista de objetos {id, nombre, salon, bloque, dias: []}
+
+  // Lógica de inicialización: Transforma el formato plano de la DB al formato de bloques del editor
+  const [materias, setMaterias] = useState(() => {
+    if (!materiasIniciales || materiasIniciales.length === 0) return [];
+
+    const agrupadas = [];
+    // Recorremos las materias individuales (lunes 7-8, martes 7-8...)
+    materiasIniciales.forEach((m) => {
+      const rangoNormalizado = m.rango.replace(/\s/g, "");
+
+      // Buscamos si ya creamos un bloque para este nombre + salon + hora
+      const existente = agrupadas.find(
+        (a) =>
+          a.nombre.toLowerCase() === m.nombre.toLowerCase() &&
+          a.salon.toLowerCase() === m.salon.toLowerCase() &&
+          a.bloque.replace(/\s/g, "") === rangoNormalizado,
+      );
+
+      if (existente) {
+        if (!existente.dias.includes(m.dia)) existente.dias.push(m.dia);
+      } else {
+        agrupadas.push({
+          id: Math.random(), // ID temporal para el renderizado del editor
+          nombre: m.nombre,
+          salon: m.salon,
+          profesor: m.profesor || "", // Soporte para el nuevo campo
+          bloque: m.rango,
+          dias: [m.dia],
+        });
+      }
+    });
+    return agrupadas;
+  });
 
   const bloquesTec = [
-    "07:00-08:00",
-    "08:00-09:00",
-    "09:00-10:00",
-    "10:00-11:00",
-    "11:00-12:00",
-    "12:00-13:00",
-    "13:00-14:00",
-    "14:00-15:00",
-    "15:00-16:00",
-    "16:00-17:00",
-    "17:00-18:00",
-    "18:00-19:00",
-    "19:00-20:00",
-    "20:00-21:00",
-    "21:00-22:00",
+    "07:00 - 08:00",
+    "08:00 - 09:00",
+    "09:00 - 10:00",
+    "10:00 - 11:00",
+    "11:00 - 12:00",
+    "12:00 - 13:00",
+    "13:00 - 14:00",
+    "14:00 - 15:00",
+    "15:00 - 16:00",
+    "16:00 - 17:00",
+    "17:00 - 18:00",
+    "18:00 - 19:00",
+    "19:00 - 20:00",
+    "20:00 - 21:00",
+    "21:00 - 22:00",
   ];
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
 
@@ -46,7 +79,8 @@ export default function EditorHorarioManual({
         id: Date.now(),
         nombre: "",
         salon: "",
-        bloque: bloquesTec[1], // Empieza en 8:00 por defecto
+        profesor: "",
+        bloque: bloquesTec[1],
         dias: [],
       },
     ]);
@@ -54,7 +88,7 @@ export default function EditorHorarioManual({
 
   const actualizarMateria = (id, campo, valor) => {
     setMaterias(
-      materias.map((m) => (m.id === id ? { ...m, [campo]: valor } : m))
+      materias.map((m) => (m.id === id ? { ...m, [campo]: valor } : m)),
     );
   };
 
@@ -68,7 +102,7 @@ export default function EditorHorarioManual({
           return { ...m, dias: nuevosDias };
         }
         return m;
-      })
+      }),
     );
   };
 
@@ -77,7 +111,7 @@ export default function EditorHorarioManual({
     if (materias.length === 0) return alert("Agrega al menos una materia");
 
     const materiasFinales = [];
-    const ocupados = new Set(); // Para validar que no choquen horas
+    const ocupados = new Set();
 
     for (const m of materias) {
       if (!m.nombre.trim() || m.dias.length === 0) {
@@ -85,10 +119,10 @@ export default function EditorHorarioManual({
         return;
       }
 
-      const [inicio, fin] = m.bloque.split("-");
+      const [inicio, fin] = m.bloque.split("-").map((hora) => hora.trim());
 
       for (const dia of m.dias) {
-        const key = `${m.bloque}-${dia}`;
+        const key = `${m.bloque.replace(/\s/g, "")}-${dia}`;
         if (ocupados.has(key)) {
           alert(`¡Choque! Tienes dos materias el ${dia} a las ${m.bloque}`);
           return;
@@ -98,6 +132,7 @@ export default function EditorHorarioManual({
         materiasFinales.push({
           nombre: m.nombre.trim(),
           salon: m.salon.trim() || "S/N",
+          profesor: m.profesor.trim() || "", // Guardamos el profesor
           dia,
           rango: m.bloque,
           inicio,
@@ -111,11 +146,10 @@ export default function EditorHorarioManual({
 
   return (
     <div className="bg-card-bg border border-white/10 rounded-[2.5rem] p-5 md:p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[85vh]">
-      {/* HEADER */}
       <header className="flex justify-between items-start mb-6 shrink-0">
         <div className="space-y-1 flex-1 pr-4">
           <h2 className="text-xl font-black uppercase italic text-white leading-none">
-            Editor Manual
+            {materiasIniciales.length > 0 ? "Editar Horario" : "Editor Manual"}
           </h2>
           <input
             value={nombre}
@@ -132,7 +166,6 @@ export default function EditorHorarioManual({
         </button>
       </header>
 
-      {/* CONTENIDO CON SCROLL */}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar py-2">
         {materias.map((m) => (
           <div
@@ -146,7 +179,6 @@ export default function EditorHorarioManual({
               <Trash2 size={14} />
             </button>
 
-            {/* Inputs de texto */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
                 <BookOpen size={12} className="text-tec-blue" />
@@ -170,9 +202,20 @@ export default function EditorHorarioManual({
                   className="bg-transparent text-[10px] font-bold text-white outline-none w-full"
                 />
               </div>
+              {/* NUEVO INPUT: PROFESOR */}
+              <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
+                <User size={12} className="text-tec-blue" />
+                <input
+                  placeholder="Profesor (Opcional)..."
+                  value={m.profesor}
+                  onChange={(e) =>
+                    actualizarMateria(m.id, "profesor", e.target.value)
+                  }
+                  className="bg-transparent text-[10px] font-bold text-white outline-none w-full"
+                />
+              </div>
             </div>
 
-            {/* Selector de Bloque */}
             <div className="flex items-center gap-2 bg-tec-blue/10 p-2 rounded-xl border border-tec-blue/20">
               <Clock size={12} className="text-tec-blue" />
               <select
@@ -190,7 +233,6 @@ export default function EditorHorarioManual({
               </select>
             </div>
 
-            {/* Selector de Días */}
             <div className="flex justify-between gap-1">
               {diasSemana.map((dia) => (
                 <button
@@ -209,7 +251,6 @@ export default function EditorHorarioManual({
           </div>
         ))}
 
-        {/* Botón agregar más */}
         <button
           onClick={agregarMateria}
           className="w-full py-4 border-2 border-dashed border-white/5 rounded-3xl text-gray-500 flex items-center justify-center gap-2 hover:bg-white/5 hover:text-tec-blue transition-all font-black text-[10px] uppercase"
@@ -218,17 +259,13 @@ export default function EditorHorarioManual({
         </button>
       </div>
 
-      {/* FOOTER */}
       <footer className="mt-6 shrink-0 space-y-3">
         <button
           onClick={validarYGuardar}
           className="w-full bg-tec-blue hover:bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
         >
-          <Save size={18} /> Guardar Perfil
+          <Save size={18} /> Guardar Cambios
         </button>
-        <div className="flex items-center justify-center gap-1.5 text-gray-600 text-[8px] font-bold uppercase tracking-widest">
-          <AlertCircle size={10} /> Verificando choques de horario
-        </div>
       </footer>
     </div>
   );

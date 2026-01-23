@@ -1,24 +1,23 @@
 "use client";
 import React from "react";
-// Cambiamos la forma de importar para que Turbopack no pierda la referencia
 import * as Lucide from "lucide-react";
 
 export default function GuiaCSV({ onClose }) {
   const ejemploHorario = [
     {
       hora: "07:00 - 08:00",
-      l: "Cálculo (F1)",
+      l: "Cálculo (F1) - Ing. García",
       m: "",
-      mi: "Cálculo (F1)",
+      mi: "Cálculo (F1) - Ing. García",
       j: "",
-      v: "Cálculo (F1)",
+      v: "Cálculo (F1) - Ing. García",
     },
     {
       hora: "08:00 - 09:00",
       l: "IA (LCA)",
-      m: "IA (LCA)",
+      m: "IA (LCA) - Dr. Smith",
       mi: "IA (LCA)",
-      j: "IA (LCA)",
+      j: "IA (LCA) - Dr. Smith",
       v: "",
     },
     {
@@ -28,14 +27,6 @@ export default function GuiaCSV({ onClose }) {
       mi: "",
       j: "Química (L1)",
       v: "",
-    },
-    {
-      hora: "10:00 - 11:00",
-      l: "Redes (L2)",
-      m: "Redes (L2)",
-      mi: "Redes (L2)",
-      j: "Redes (L2)",
-      v: "Redes (L2)",
     },
   ];
 
@@ -51,81 +42,77 @@ export default function GuiaCSV({ onClose }) {
         {/* HEADER */}
         <div className="flex justify-between items-center mb-8 text-tec-blue">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-tec-blue/10 flex items-center justify-center">
-              <Lucide.Info size={24} />
+            <div className="w-12 h-12 rounded-2xl bg-tec-blue/10 flex items-center justify-center border border-tec-blue/20">
+              <Lucide.Info size={28} />
             </div>
             <div>
               <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white leading-none">
-                Guía de Importación
+                Guía de Importación{" "}
+                <span className="text-tec-blue text-sm">v2.1</span>
               </h3>
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">
-                Estandarización de Archivos
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mt-1">
+                Estandarización de Datos & Profesores
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full hover:bg-red-500/20 hover:text-red-500 transition-all text-white"
+            className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full hover:bg-red-500/20 hover:text-red-500 transition-all text-white border border-white/5"
           >
             <Lucide.X size={20} />
           </button>
         </div>
 
         <div className="space-y-10 text-left">
-          {/* PASO 1: EXCEL */}
+          {/* PASO 1: ESTRUCTURA */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <span className="bg-white/5 text-white px-3 py-1 rounded-full text-[10px] font-black italic">
-                PASO 01
+              <span className="bg-tec-blue text-white px-3 py-1 rounded-full text-[10px] font-black italic">
+                ESTRUCTURA
               </span>
               <p className="text-xs font-black uppercase text-gray-400 tracking-widest flex items-center gap-2">
-                <Lucide.Table size={14} /> Diseño en Excel / Hojas de Cálculo
+                <Lucide.Table size={14} /> Diseño en Hoja de Cálculo
               </p>
             </div>
 
-            <div className="overflow-x-auto rounded-3xl border border-white/5 bg-white/[0.02] p-1">
-              <table className="w-full text-[10px] font-bold min-w-[600px] text-center border-separate border-spacing-1">
+            <div className="overflow-x-auto rounded-[2rem] border border-white/5 bg-white/[0.02] p-1 shadow-inner">
+              <table className="w-full text-[10px] font-bold min-w-[700px] text-center border-separate border-spacing-1">
                 <thead>
                   <tr className="bg-tec-blue text-white uppercase italic">
-                    <th className="p-3 rounded-xl">Hora</th>
-                    <th className="p-3 rounded-xl">Lunes</th>
-                    <th className="p-3 rounded-xl">Martes</th>
-                    <th className="p-3 rounded-xl">Miércoles</th>
-                    <th className="p-3 rounded-xl">Jueves</th>
-                    <th className="p-3 rounded-xl">Viernes</th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Hora
+                    </th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Lunes
+                    </th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Martes
+                    </th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Miércoles
+                    </th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Jueves
+                    </th>
+                    <th className="p-3 rounded-xl border border-white/10">
+                      Viernes
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="text-gray-400">
                   {ejemploHorario.map((row, i) => (
                     <tr key={i}>
-                      <td className="p-3 bg-white/5 rounded-xl text-white font-mono">
+                      <td className="p-3 bg-white/5 rounded-xl text-white font-mono border border-white/5">
                         {row.hora}
                       </td>
-                      <td
-                        className={`p-3 rounded-xl border border-white/5 ${row.l ? "text-tec-blue bg-tec-blue/5" : "text-gray-700 italic"}`}
-                      >
-                        {row.l || "vacío"}
-                      </td>
-                      <td
-                        className={`p-3 rounded-xl border border-white/5 ${row.m ? "text-tec-blue bg-tec-blue/5" : "text-gray-700 italic"}`}
-                      >
-                        {row.m || "vacío"}
-                      </td>
-                      <td
-                        className={`p-3 rounded-xl border border-white/5 ${row.mi ? "text-tec-blue bg-tec-blue/5" : "text-gray-700 italic"}`}
-                      >
-                        {row.mi || "vacío"}
-                      </td>
-                      <td
-                        className={`p-3 rounded-xl border border-white/5 ${row.j ? "text-tec-blue bg-tec-blue/5" : "text-gray-700 italic"}`}
-                      >
-                        {row.j || "vacío"}
-                      </td>
-                      <td
-                        className={`p-3 rounded-xl border border-white/5 ${row.v ? "text-tec-blue bg-tec-blue/5" : "text-gray-700 italic"}`}
-                      >
-                        {row.v || "vacío"}
-                      </td>
+                      {[row.l, row.m, row.mi, row.j, row.v].map((val, idx) => (
+                        <td
+                          key={idx}
+                          className={`p-3 rounded-xl border border-white/5 ${val ? "text-tec-blue bg-tec-blue/5 shadow-sm" : "text-gray-800 italic font-normal"}`}
+                        >
+                          {val || "vacío"}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -133,65 +120,116 @@ export default function GuiaCSV({ onClose }) {
             </div>
           </div>
 
-          {/* PASO 2: CSV RAW */}
+          {/* PASO 2: TEXTO PLANO */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <span className="bg-white/5 text-white px-3 py-1 rounded-full text-[10px] font-black italic">
-                PASO 02
+                FORMATO CSV
               </span>
               <p className="text-xs font-black uppercase text-gray-400 tracking-widest flex items-center gap-2">
-                <Lucide.FileType size={14} /> Exportar como texto plano (.csv)
+                <Lucide.FileType size={14} /> Vista de exportación (.csv)
               </p>
             </div>
 
-            <div className="bg-black/60 p-6 rounded-2xl border border-white/10 font-mono text-[11px] text-tec-blue leading-relaxed overflow-x-auto">
+            <div className="bg-black/40 p-6 rounded-3xl border border-white/5 font-mono text-[11px] text-tec-blue/80 leading-relaxed overflow-x-auto shadow-inner relative group">
+              <div className="absolute top-4 right-4 opacity-20 group-hover:opacity-100 transition-opacity">
+                <Lucide.Code size={16} className="text-white" />
+              </div>
               Hora,Lunes,Martes,Miércoles,Jueves,Viernes
               <br />
-              07:00 - 08:00,Cálculo (F1),,Cálculo (F1),,Cálculo (F1)
+              07:00 - 08:00,Cálculo (F1) - Ing. García,,Cálculo (F1) - Ing.
+              García,,
               <br />
-              08:00 - 09:00,IA (LCA),IA (LCA),IA (LCA),IA (LCA),
-              <br />
-              09:00 - 10:00,,Química (L1),,Química (L1),
-              <br />
-              10:00 - 11:00,Redes (L2),Redes (L2),Redes (L2),Redes (L2),Redes
-              (L2)
+              08:00 - 09:00,IA (LCA),IA (LCA) - Dr. Smith,IA (LCA),IA (LCA) -
+              Dr. Smith,
             </div>
           </div>
 
-          {/* CHECKLIST */}
+          {/* REGLAS Y PROFESORES */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-tec-blue/5 p-6 rounded-[2rem] border border-tec-blue/20">
-              <p className="text-tec-blue font-black text-xs uppercase mb-4 tracking-widest flex items-center gap-2">
-                <Lucide.CheckCircle2 size={14} /> REGLAS DE ORO
+            {/* REGLAS DE ORO */}
+            <div className="bg-tec-blue/5 p-6 rounded-[2.5rem] border border-tec-blue/20">
+              <p className="text-tec-blue font-black text-xs uppercase mb-5 tracking-widest flex items-center gap-2">
+                <Lucide.CheckCircle2 size={16} /> REGLAS DE ORO
               </p>
-              <ul className="space-y-3">
+              <ul className="space-y-4">
                 {[
-                  "Materia y salón en la misma celda.",
-                  "Salón entre paréntesis: (A1).",
-                  "Celdas vacías para horas libres.",
-                  "No uses comas internas.",
-                ].map((txt, i) => (
-                  <li
-                    key={i}
-                    className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-3"
-                  >
-                    <span className="text-tec-blue font-black">◈</span> {txt}
+                  {
+                    t: "Materia y salón:",
+                    d: "Deben ir juntos en la misma celda.",
+                  },
+                  { t: "Salón:", d: "Siempre debe ir entre paréntesis: (A1)." },
+                  {
+                    t: "Profesor:",
+                    d: "Se añade después de un guion corto: - Nombre.",
+                  },
+                  { t: "Comas:", d: "No uses comas dentro de las celdas." },
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-tec-blue mt-1.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] text-white font-black uppercase leading-none mb-1">
+                        {item.t}
+                      </p>
+                      <p className="text-[9px] text-gray-500 font-bold uppercase">
+                        {item.d}
+                      </p>
+                    </div>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="bg-white/[0.03] p-6 rounded-[2rem] border border-white/5">
-              <p className="text-white font-black text-xs uppercase mb-4 tracking-widest flex items-center gap-2">
-                <Lucide.AlertCircle size={14} /> IMPORTANTE
-              </p>
-              <p className="text-[9px] text-yellow-500/80 font-black uppercase italic leading-tight">
-                Asegúrate de que el delimitador al guardar en Excel sea COMA (,)
-                y no punto y coma (;).
-              </p>
+            {/* INFO PROFESORES */}
+            <div className="bg-white/[0.03] p-6 rounded-[2.5rem] border border-white/5 flex flex-col justify-between">
+              <div>
+                <p className="text-white font-black text-xs uppercase mb-5 tracking-widest flex items-center gap-2">
+                  <Lucide.GraduationCap
+                    size={16}
+                    className="text-accent-purple"
+                  />{" "}
+                  GESTIÓN DE PROFESORES
+                </p>
+                <div className="space-y-4">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase leading-relaxed">
+                    El campo de profesor es{" "}
+                    <span className="text-tec-blue font-black underline">
+                      completamente opcional
+                    </span>
+                    . Si el parser no detecta un guion despues del salón,
+                    simplemente dejará el campo vacío.
+                  </p>
+                  <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+                    <p className="text-[8px] font-black text-gray-600 uppercase mb-1">
+                      Ejemplos válidos:
+                    </p>
+                    <code className="text-[9px] text-accent-purple block">
+                      Fundamentos (L1) - Ing. Ramos
+                    </code>
+                    <code className="text-[9px] text-gray-400 block mt-1">
+                      Fundamentos (L1)
+                    </code>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center gap-2 text-yellow-500/50">
+                <Lucide.AlertCircle size={14} />
+                <p className="text-[8px] font-black uppercase italic">
+                  Recuerda usar coma (,) como delimitador de archivo.
+                </p>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* BOTÓN INFERIOR CERRAR */}
+        <button
+          onClick={onClose}
+          className="w-full mt-8 py-4 bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] transition-all border border-white/5"
+        >
+          Entendido, cerrar guía
+        </button>
       </div>
     </div>
   );

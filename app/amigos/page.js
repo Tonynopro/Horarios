@@ -29,7 +29,7 @@ export default function AmigosPage() {
   const [amigoSeleccionado, setAmigoSeleccionado] = useState(null);
   const [idAmigoBase, setIdAmigoBase] = useState("yo");
   const [editandoAmigo, setEditandoAmigo] = useState(null);
-  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false); // Estado para la Guía
   const [showManual, setShowManual] = useState(false);
 
   const sectionSubidaRef = useRef(null);
@@ -96,21 +96,27 @@ export default function AmigosPage() {
         });
         setNombre("");
       } catch (err) {
-        alert("Error de formato.");
+        alert("Error de formato. Revisa la guía (i)");
       }
     };
     reader.readAsText(file);
   };
 
-  // --- LÓGICA DE FILTROS BLINDADA ---
+  const handleEditar = (e, amigo) => {
+    e.stopPropagation();
+    setEditandoAmigo(amigo);
+    setNombre(amigo.nombreUsuario);
+    setShowManual(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // --- LÓGICA DE FILTROS ---
   const obtenerDetalleFiltro = (amigo) => {
     const horarioBase =
       idAmigoBase === "yo"
         ? miHorario
         : amigos?.find((a) => a.id === idAmigoBase);
-
     if (!horarioBase || !amigo) return null;
-
     const coincidenciasCompactas = [];
     const norm = (r) => (r || "").replace(/\s/g, "");
 
@@ -135,7 +141,6 @@ export default function AmigosPage() {
             const limBase = getLimites(horarioBase.materias, dia);
             const limAmigo = getLimites(amigo.materias, dia);
             if (!limBase || !limAmigo) return;
-
             const tBloqueIni = parseInt(
               norm(rango).split("-")[0].replace(":", ""),
               10,
@@ -144,7 +149,6 @@ export default function AmigosPage() {
               norm(rango).split("-")[1].replace(":", ""),
               10,
             );
-
             if (
               tBloqueIni >= Math.max(limBase.entrada, limAmigo.entrada) &&
               tBloqueFin <= Math.min(limBase.salida, limAmigo.salida)
@@ -160,7 +164,6 @@ export default function AmigosPage() {
             }
           });
           if (diasLibresCompartidos.length > 0) {
-            const horaInicioDoc = rango.split("-")[0];
             const horaFormateada = formatearRango(rango, formatoHora)
               .split("-")[0]
               .trim();
@@ -170,7 +173,6 @@ export default function AmigosPage() {
           }
         });
         break;
-
       case "entrada_comun":
       case "salida_comun":
         diasSemana.forEach((dia) => {
@@ -208,7 +210,6 @@ export default function AmigosPage() {
           }
         });
         break;
-
       case "materias_comun":
         const comunes = new Set();
         amigo.materias.forEach((sm) => {
@@ -229,13 +230,6 @@ export default function AmigosPage() {
     return coincidenciasCompactas.length > 0
       ? [...new Set(coincidenciasCompactas)]
       : null;
-  };
-
-  const handleEditar = (e, amigo) => {
-    e.stopPropagation();
-    setEditandoAmigo(amigo);
-    setNombre(amigo.nombreUsuario);
-    setShowManual(true);
   };
 
   const resultadosFiltrados = (() => {
@@ -262,14 +256,21 @@ export default function AmigosPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in relative px-2 text-white">
+      {/* MODAL DEL EDITOR */}
       {showManual && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
-          onClick={() => setShowManual(false)}
+          onClick={() => {
+            setShowManual(false);
+            setEditandoAmigo(null);
+            setNombre("");
+          }}
         >
           <div onClick={(e) => e.stopPropagation()}>
             <EditorHorarioManual
+              key={editandoAmigo?.id || "nuevo"}
               nombreInicial={nombre}
+              materiasIniciales={editandoAmigo?.materias || []}
               onCancel={() => {
                 setShowManual(false);
                 setEditandoAmigo(null);
@@ -281,9 +282,13 @@ export default function AmigosPage() {
         </div>
       )}
 
+      {/* MODAL DE LA GUÍA CSV */}
+      {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
+
+      {/* BOTÓN FLOTANTE DE INFO / GUÍA */}
       <button
         onClick={() => setShowInfoModal(true)}
-        className="fixed bottom-24 right-8 z-50 p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all"
+        className="fixed bottom-24 right-8 z-[150] p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
       >
         <Info size={24} />
       </button>
@@ -306,32 +311,42 @@ export default function AmigosPage() {
         </div>
       </header>
 
+      {/* SECCIÓN DE AGREGAR / EDITAR */}
       <section
         ref={sectionSubidaRef}
         className="bg-card-bg p-6 rounded-[2rem] border border-white/5 shadow-2xl flex flex-col gap-4"
       >
-        <div className="space-y-2">
-          <p className="text-[10px] font-black uppercase text-gray-500 ml-2 tracking-widest">
+        <div className="flex justify-between items-center px-2">
+          <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
             {editandoAmigo
               ? `Modificando: ${editandoAmigo.nombreUsuario}`
               : "Nuevo Integrante"}
           </p>
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre del amigo..."
-            className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
-          />
+          <button
+            onClick={() => setShowInfoModal(true)}
+            className="text-[9px] font-black text-tec-blue uppercase hover:underline flex items-center gap-1"
+          >
+            <Info size={12} /> Guía de Formato
+          </button>
         </div>
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Nombre del amigo..."
+          className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
+        />
+
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => setShowManual(true)}
             className="flex-1 py-4 bg-white/5 border border-white/10 rounded-2xl font-black text-[10px] text-gray-400 hover:text-white transition-all uppercase flex items-center justify-center gap-2"
           >
-            <Keyboard size={16} /> Registro Manual
+            <Keyboard size={16} />{" "}
+            {editandoAmigo ? "Editar Manualmente" : "Registro Manual"}
           </button>
           <label className="flex-1 py-4 bg-tec-blue text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:bg-blue-600 transition-all">
-            <FileUp size={16} /> IMPORTAR CSV
+            <FileUp size={16} />{" "}
+            {editandoAmigo ? "REEMPLAZAR CSV" : "IMPORTAR CSV"}
             <input
               type="file"
               className="hidden"
@@ -342,7 +357,9 @@ export default function AmigosPage() {
         </div>
       </section>
 
+      {/* FILTROS Y RESULTADOS */}
       <div className="space-y-4">
+        {/* Selector de Sujeto Base */}
         <div className="p-4 bg-white/5 rounded-[2rem] border border-white/5 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-inner">
           <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap ml-2">
             Sujeto Base:
@@ -364,6 +381,7 @@ export default function AmigosPage() {
           ))}
         </div>
 
+        {/* Chips de Filtros */}
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
           {[
             {
@@ -397,6 +415,7 @@ export default function AmigosPage() {
           ))}
         </div>
 
+        {/* Grid de Resultados */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {resultadosFiltrados.map((amigo) => (
             <div
@@ -432,6 +451,7 @@ export default function AmigosPage() {
         </div>
       </div>
 
+      {/* DIRECTORIO */}
       <section className="pt-16 border-t border-white/5 space-y-8 text-center">
         <h2 className="text-[10px] font-black uppercase text-gray-600 tracking-[0.4em]">
           Directorio de Red
@@ -476,8 +496,7 @@ export default function AmigosPage() {
         </div>
       </section>
 
-      {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
-
+      {/* VISOR DE HORARIO */}
       {amigoSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div

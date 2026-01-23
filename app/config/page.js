@@ -19,6 +19,7 @@ import {
   Keyboard,
   AlertCircle,
   Clock,
+  Edit3, // Icono para editar
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 
@@ -35,7 +36,11 @@ export default function ConfigPage() {
 
   const topRef = useRef(null);
 
+  // --- CONSULTAS ---
   const perfilActual = useLiveQuery(() => db.perfil.toCollection().first());
+  const miHorarioActual = useLiveQuery(() =>
+    db.horarios.where({ esPrincipal: "true" }).first(),
+  );
   const todosLosHorariosRaw = useLiveQuery(() => db.horarios.toArray());
 
   const todosLosHorarios = (todosLosHorariosRaw || []).filter(
@@ -120,7 +125,6 @@ export default function ConfigPage() {
         const lista = Array.isArray(importados)
           ? importados
           : importados.horarios || [];
-
         const datosAInsertar = lista
           .filter((h) => h && h.nombreUsuario && h.materias?.length > 0)
           .map((h) => ({ ...h, esPrincipal: "false" }));
@@ -168,6 +172,7 @@ export default function ConfigPage() {
     <div className="max-w-4xl mx-auto space-y-10 pb-48 px-4 md:px-0 animate-in fade-in duration-500 relative">
       <div ref={topRef} className="absolute -top-20" />
 
+      {/* MODAL EDITOR CON KEY PARA REINICIAR CON TUS DATOS */}
       {showManual && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
@@ -175,7 +180,9 @@ export default function ConfigPage() {
         >
           <div onClick={(e) => e.stopPropagation()}>
             <EditorHorarioManual
+              key={miHorarioActual?.id || "nuevo_propio"}
               nombreInicial={perfilActual?.nombre || ""}
+              materiasIniciales={miHorarioActual?.materias || []} // <--- CARGA TUS MATERIAS
               onCancel={() => setShowManual(false)}
               onSave={guardarDesdeEditor}
             />
@@ -208,6 +215,7 @@ export default function ConfigPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-8">
+        {/* SECCIÓN SI HAY IMPORTACIONES PENDIENTES */}
         {pendientesConfig.length > 0 && (
           <section className="bg-tec-blue p-8 rounded-[2.5rem] shadow-2xl border border-white/20 animate-in slide-in-from-top-4">
             <h2 className="text-xl font-black uppercase text-white mb-4 flex items-center gap-2">
@@ -252,6 +260,7 @@ export default function ConfigPage() {
               Mi Perfil
             </h2>
           </div>
+
           <div className="space-y-6">
             <div>
               <p className="text-[10px] font-black uppercase text-gray-500 ml-2 mb-2 tracking-widest">
@@ -265,7 +274,6 @@ export default function ConfigPage() {
               />
             </div>
 
-            {/* NUEVA SECCIÓN: FORMATO DE HORA */}
             <div>
               <p className="text-[10px] font-black uppercase text-gray-500 ml-2 mb-2 tracking-widest flex items-center gap-2">
                 <Clock size={12} /> Visualización de Tiempo
@@ -288,28 +296,32 @@ export default function ConfigPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* BOTÓN PARA EDITAR MI PROPIO HORARIO */}
               <button
                 onClick={() => setShowManual(true)}
-                className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-left"
+                className="flex items-center gap-4 p-5 bg-tec-blue/10 border border-tec-blue/20 rounded-2xl hover:bg-tec-blue/20 transition-all text-left group"
               >
-                <Keyboard size={24} className="text-tec-blue" />
+                <div className="w-12 h-12 bg-tec-blue/20 rounded-xl flex items-center justify-center text-tec-blue group-hover:scale-110 transition-transform">
+                  <Edit3 size={24} />
+                </div>
                 <div>
                   <p className="font-black text-sm uppercase text-white">
-                    Editar a mano
+                    Editar Horario
                   </p>
                   <p className="text-[9px] text-gray-500 uppercase font-bold">
-                    Manual
+                    Modificar mis materias
                   </p>
                 </div>
               </button>
+
               <label className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all">
                 <FileUp size={24} className="text-tec-blue" />
                 <div>
                   <p className="font-black text-sm uppercase text-white">
-                    Subir CSV
+                    Subir nuevo CSV
                   </p>
                   <p className="text-[9px] text-gray-500 uppercase font-bold">
-                    Archivo
+                    Reemplazar actual
                   </p>
                 </div>
                 <input
@@ -353,6 +365,7 @@ export default function ConfigPage() {
           </div>
         </section>
 
+        {/* SECCIÓN RESPALDO */}
         <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-3 text-accent-purple mb-6 text-xl font-black uppercase tracking-tight text-white">
             <Share2 size={24} /> Respaldo
@@ -384,13 +397,7 @@ export default function ConfigPage() {
 
         {status.msg && (
           <div
-            className={`p-4 rounded-2xl flex items-center gap-2 text-sm font-bold transition-all duration-500 ${
-              visible ? "opacity-100 scale-100" : "opacity-0 scale-95"
-            } ${
-              status.type === "error"
-                ? "bg-red-500/10 text-red-400"
-                : "bg-green-500/10 text-green-400"
-            }`}
+            className={`p-4 rounded-2xl flex items-center gap-2 text-sm font-bold transition-all duration-500 ${visible ? "opacity-100 scale-100" : "opacity-0 scale-95"} ${status.type === "error" ? "bg-red-500/10 text-red-400" : "bg-green-500/10 text-green-400"}`}
           >
             <AlertCircle size={16} /> {status.msg}
           </div>
@@ -406,6 +413,7 @@ export default function ConfigPage() {
 
       {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
+      {/* MODAL EXPORTACIÓN */}
       {mostrarExportModal && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
@@ -432,11 +440,7 @@ export default function ConfigPage() {
                         : [...prev, h.id],
                     )
                   }
-                  className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                    seleccionados.includes(h.id)
-                      ? "bg-tec-blue/20 border-tec-blue text-white shadow-lg"
-                      : "bg-white/5 border-white/5 text-gray-500 hover:bg-white/10"
-                  }`}
+                  className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${seleccionados.includes(h.id) ? "bg-tec-blue/20 border-tec-blue text-white shadow-lg" : "bg-white/5 border-white/5 text-gray-500 hover:bg-white/10"}`}
                 >
                   <span className="font-black text-xs uppercase truncate max-w-[150px]">
                     {h.nombreUsuario}

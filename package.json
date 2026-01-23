@@ -13,8 +13,10 @@
     "dexie": "^4.2.1",
     "dexie-react-hooks": "^4.2.0",
     "framer-motion": "^12.26.2",
+    "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.562.0",
     "next": "16.1.2",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

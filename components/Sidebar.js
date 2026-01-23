@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   X,
   ChevronUp,
+  GraduationCap,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -105,7 +106,7 @@ export default function Sidebar() {
   const tieneContenido =
     (claseHoy || amigosEnClaseAhora.length > 0) && !estaCerrado;
 
-  // Componente Reutilizable para la tarjeta de amigo
+  // Componente Reutilizable para la tarjeta de amigo (Móvil y Escritorio)
   const FriendCard = ({ amigo }) => (
     <div
       className={`p-3 rounded-2xl border transition-all duration-300 ${
@@ -137,6 +138,12 @@ export default function Sidebar() {
       <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
         {amigo.claseActual.nombre}
       </p>
+      {/* PROFESOR DEL AMIGO */}
+      {amigo.claseActual.profesor && (
+        <p className="text-[8px] text-gray-600 font-bold uppercase truncate mt-0.5 italic">
+          {amigo.claseActual.profesor}
+        </p>
+      )}
     </div>
   );
 
@@ -198,7 +205,14 @@ export default function Sidebar() {
                       <p className="text-tec-blue font-bold text-sm mt-1 uppercase">
                         {claseHoy.nombre}
                       </p>
-                      <div className="flex items-center gap-1 mt-2 text-gray-500 text-[10px] font-black">
+                      {/* PROFESOR EN CAJÓN MÓVIL */}
+                      {claseHoy.profesor && (
+                        <p className="text-gray-400 text-[10px] font-bold uppercase mt-1 flex items-center gap-1">
+                          <GraduationCap size={12} className="text-tec-blue" />{" "}
+                          {claseHoy.profesor}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-1 mt-2 text-gray-500 text-[10px] font-black uppercase">
                         <MapPin size={12} /> SALÓN: {claseHoy.salon}
                       </div>
                     </>
@@ -206,7 +220,7 @@ export default function Sidebar() {
                 </div>
                 <button
                   onClick={() => setShowMobileDrawer(false)}
-                  className="p-2 bg-white/5 rounded-full"
+                  className="p-2 bg-white/5 rounded-full text-white"
                 >
                   <X size={20} />
                 </button>
@@ -271,7 +285,7 @@ export default function Sidebar() {
           </div>
           <p
             suppressHydrationWarning
-            className="text-lg font-mono font-black text-white/80"
+            className="text-lg font-mono font-black text-white/80 uppercase"
           >
             {estaCerrado ? "CERRADO" : rangoActualSistema}
           </p>
@@ -290,7 +304,6 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* SECCIÓN DE AMIGOS EN ESCRITORIO */}
         {!estaCerrado && amigosEnClaseAhora.length > 0 && (
           <div className="mb-8">
             <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
@@ -304,7 +317,6 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* PIE DE SIDEBAR: TU CLASE */}
         <div
           className={`mt-auto p-5 rounded-[2.2rem] border transition-all relative ${tieneContenido && claseHoy ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40" : "bg-white/[0.02] border-white/5"}`}
         >
@@ -331,7 +343,13 @@ export default function Sidebar() {
               <p className="text-xs text-gray-400 font-bold uppercase mt-1 italic">
                 {claseHoy.nombre}
               </p>
-              <div className="flex items-center gap-1 mt-1.5 text-tec-blue font-black uppercase text-[11px]">
+              {/* PROFESOR EN TU CLASE (ESCRITORIO) */}
+              {claseHoy.profesor && (
+                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5 truncate">
+                  {claseHoy.profesor}
+                </p>
+              )}
+              <div className="flex items-center gap-1 mt-2 text-tec-blue font-black uppercase text-[11px]">
                 <MapPin size={10} /> Aula: {claseHoy.salon}
               </div>
             </div>
