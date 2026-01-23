@@ -8,11 +8,9 @@ import EditorHorarioManual from "@/components/EditorHorarioManual";
 import GuiaCSV from "@/components/GuiaCSV";
 import {
   FileUp,
-  Users,
   Search,
   X,
   BookOpen,
-  Clock,
   Edit3,
   Trash2,
   Info,
@@ -29,7 +27,7 @@ export default function AmigosPage() {
   const [amigoSeleccionado, setAmigoSeleccionado] = useState(null);
   const [idAmigoBase, setIdAmigoBase] = useState("yo");
   const [editandoAmigo, setEditandoAmigo] = useState(null);
-  const [showInfoModal, setShowInfoModal] = useState(false); // Estado para la Guía
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [showManual, setShowManual] = useState(false);
 
   const sectionSubidaRef = useRef(null);
@@ -110,7 +108,7 @@ export default function AmigosPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // --- LÓGICA DE FILTROS ---
+  // --- LÓGICA DE FILTROS (CON AGRUPACIÓN DE DÍAS) ---
   const obtenerDetalleFiltro = (amigo) => {
     const horarioBase =
       idAmigoBase === "yo"
@@ -149,6 +147,7 @@ export default function AmigosPage() {
               norm(rango).split("-")[1].replace(":", ""),
               10,
             );
+
             if (
               tBloqueIni >= Math.max(limBase.entrada, limAmigo.entrada) &&
               tBloqueFin <= Math.min(limBase.salida, limAmigo.salida)
@@ -163,16 +162,30 @@ export default function AmigosPage() {
                 diasLibresCompartidos.push(dia);
             }
           });
+
           if (diasLibresCompartidos.length > 0) {
             const horaFormateada = formatearRango(rango, formatoHora)
               .split("-")[0]
               .trim();
-            coincidenciasCompactas.push(
-              `${diasLibresCompartidos[0].slice(0, 2).toUpperCase()} ${horaFormateada}`,
-            );
+            const diaInicio = diasLibresCompartidos[0]
+              .slice(0, 3)
+              .toUpperCase();
+            const diaFin = diasLibresCompartidos[
+              diasLibresCompartidos.length - 1
+            ]
+              .slice(0, 3)
+              .toUpperCase();
+
+            const labelDias =
+              diasLibresCompartidos.length > 1
+                ? `${diaInicio}-${diaFin}`
+                : diaInicio;
+
+            coincidenciasCompactas.push(`${labelDias} @ ${horaFormateada}`);
           }
         });
         break;
+
       case "entrada_comun":
       case "salida_comun":
         diasSemana.forEach((dia) => {
@@ -190,7 +203,7 @@ export default function AmigosPage() {
               );
               if (mat)
                 coincidenciasCompactas.push(
-                  `${dia.slice(0, 2).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[0]}`,
+                  `${dia.slice(0, 3).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[0]}`,
                 );
             }
             if (
@@ -204,12 +217,13 @@ export default function AmigosPage() {
               );
               if (mat)
                 coincidenciasCompactas.push(
-                  `${dia.slice(0, 2).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[1]}`,
+                  `${dia.slice(0, 3).toUpperCase()} @ ${formatearRango(mat.rango, formatoHora).split("-")[1]}`,
                 );
             }
           }
         });
         break;
+
       case "materias_comun":
         const comunes = new Set();
         amigo.materias.forEach((sm) => {
@@ -256,7 +270,7 @@ export default function AmigosPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-32 animate-in fade-in relative px-2 text-white">
-      {/* MODAL DEL EDITOR */}
+      {/* MODALES */}
       {showManual && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
@@ -282,10 +296,9 @@ export default function AmigosPage() {
         </div>
       )}
 
-      {/* MODAL DE LA GUÍA CSV */}
       {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
-      {/* BOTÓN FLOTANTE DE INFO / GUÍA */}
+      {/* BOTÓN FLOTANTE INFO */}
       <button
         onClick={() => setShowInfoModal(true)}
         className="fixed bottom-24 right-8 z-[150] p-4 bg-tec-blue text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
@@ -311,7 +324,7 @@ export default function AmigosPage() {
         </div>
       </header>
 
-      {/* SECCIÓN DE AGREGAR / EDITAR */}
+      {/* SECCIÓN SUBIDA */}
       <section
         ref={sectionSubidaRef}
         className="bg-card-bg p-6 rounded-[2rem] border border-white/5 shadow-2xl flex flex-col gap-4"
@@ -335,7 +348,6 @@ export default function AmigosPage() {
           placeholder="Nombre del amigo..."
           className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-tec-blue font-bold text-white shadow-inner"
         />
-
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => setShowManual(true)}
@@ -359,7 +371,6 @@ export default function AmigosPage() {
 
       {/* FILTROS Y RESULTADOS */}
       <div className="space-y-4">
-        {/* Selector de Sujeto Base */}
         <div className="p-4 bg-white/5 rounded-[2rem] border border-white/5 flex items-center gap-4 overflow-x-auto no-scrollbar shadow-inner">
           <span className="text-[10px] font-black uppercase text-gray-400 whitespace-nowrap ml-2">
             Sujeto Base:
@@ -381,7 +392,6 @@ export default function AmigosPage() {
           ))}
         </div>
 
-        {/* Chips de Filtros */}
         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
           {[
             {
@@ -415,7 +425,6 @@ export default function AmigosPage() {
           ))}
         </div>
 
-        {/* Grid de Resultados */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {resultadosFiltrados.map((amigo) => (
             <div
