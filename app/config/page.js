@@ -16,19 +16,25 @@ import {
   Square,
   RefreshCcw,
   Info,
-  Keyboard,
   AlertCircle,
   Clock,
-  Edit3, // Icono para editar
+  Edit3,
+  FileCode,
+  Users, // Icono para vincular desde amigos
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useSearchParams } from "next/navigation"; // Importado para detectar el status
 
 export default function ConfigPage() {
+  const searchParams = useSearchParams();
+  const isFdoSuccess = searchParams.get("status") === "fdo_success"; // Detectar el parámetro
+
   const [nombre, setNombre] = useState("");
   const [status, setStatus] = useState({ type: "", msg: "" });
   const [visible, setVisible] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [showVinculaModal, setShowVinculaModal] = useState(false); // Modal de amigos
 
   const [pendientesConfig, setPendientesConfig] = useState([]);
   const [mostrarExportModal, setMostrarExportModal] = useState(false);
@@ -42,6 +48,11 @@ export default function ConfigPage() {
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
   const todosLosHorariosRaw = useLiveQuery(() => db.horarios.toArray());
+
+  // Filtrar solo amigos (los que no son "yo")
+  const misAmigos = (todosLosHorariosRaw || []).filter(
+    (h) => h.esPrincipal === "false",
+  );
 
   const todosLosHorarios = (todosLosHorariosRaw || []).filter(
     (h) =>
@@ -62,6 +73,34 @@ export default function ConfigPage() {
       return () => clearTimeout(timer);
     }
   }, [status.msg]);
+
+  // --- FUNCIÓN PARA PASAR UN AMIGO A "YO" ---
+  const establecerComoYo = async (amigo) => {
+    try {
+      // 1. Quitar marca de principal a todos
+      await db.horarios
+        .where({ esPrincipal: "true" })
+        .modify({ esPrincipal: "false" });
+      // 2. Poner al amigo seleccionado como principal
+      await db.horarios.update(amigo.id, { esPrincipal: "true" });
+      // 3. Actualizar tabla perfil
+      const currentFormat = perfilActual?.formatoHora || 24;
+      await db.perfil.clear();
+      await db.perfil.add({
+        nombre: amigo.nombreUsuario,
+        id: "usuario_principal",
+        updatedAt: Date.now(),
+        formatoHora: currentFormat,
+      });
+      setShowVinculaModal(false);
+      setStatus({
+        type: "success",
+        msg: `Perfil vinculado: ${amigo.nombreUsuario}`,
+      });
+    } catch (err) {
+      setStatus({ type: "error", msg: "Error al vincular perfil." });
+    }
+  };
 
   const cambiarFormatoHora = async (formato) => {
     if (!perfilActual) return;
@@ -112,6 +151,28 @@ export default function ConfigPage() {
     setStatus({
       type: "success",
       msg: `Exportados ${dataAExportar.length} perfiles.`,
+    });
+  };
+
+  const ejecutarExportacionFdo = () => {
+    const dataAExportar = todosLosHorarios
+      .filter((h) => seleccionados.includes(h.id))
+      .map((h) => ({ ...h, esPrincipal: "false" }));
+
+    const dataStr = JSON.stringify(dataAExportar);
+    const blob = new Blob([dataStr], { type: "application/x-fdo" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Network_${Date.now()}.fdo`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+    setMostrarExportModal(false);
+    setStatus({
+      type: "success",
+      msg: `Exportados ${dataAExportar.length} perfiles (.fdo).`,
     });
   };
 
@@ -172,7 +233,7 @@ export default function ConfigPage() {
     <div className="max-w-4xl mx-auto space-y-10 pb-48 px-4 md:px-0 animate-in fade-in duration-500 relative">
       <div ref={topRef} className="absolute -top-20" />
 
-      {/* MODAL EDITOR CON KEY PARA REINICIAR CON TUS DATOS */}
+      {/* MODALES */}
       {showManual && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
@@ -182,10 +243,52 @@ export default function ConfigPage() {
             <EditorHorarioManual
               key={miHorarioActual?.id || "nuevo_propio"}
               nombreInicial={perfilActual?.nombre || ""}
-              materiasIniciales={miHorarioActual?.materias || []} // <--- CARGA TUS MATERIAS
+              materiasIniciales={miHorarioActual?.materias || []}
               onCancel={() => setShowManual(false)}
               onSave={guardarDesdeEditor}
             />
+          </div>
+        </div>
+      )}
+
+      {showVinculaModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          onClick={() => setShowVinculaModal(false)}
+        >
+          <div
+            className="bg-card-bg w-full max-w-md rounded-[3rem] border border-white/10 p-8 shadow-2xl animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6 text-white font-black uppercase italic">
+              <h3>Elegir de Amigos</h3>
+              <button onClick={() => setShowVinculaModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar">
+              {misAmigos.length === 0 ? (
+                <p className="text-gray-500 text-center py-10 font-bold uppercase text-[10px]">
+                  No tienes amigos agregados
+                </p>
+              ) : (
+                misAmigos.map((amigo) => (
+                  <button
+                    key={amigo.id}
+                    onClick={() => establecerComoYo(amigo)}
+                    className="w-full p-4 bg-white/5 border border-white/5 rounded-2xl flex items-center justify-between hover:bg-tec-blue hover:text-white transition-all group"
+                  >
+                    <span className="font-black text-xs uppercase">
+                      {amigo.nombreUsuario}
+                    </span>
+                    <CheckCircle2
+                      size={16}
+                      className="opacity-0 group-hover:opacity-100"
+                    />
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -225,25 +328,7 @@ export default function ConfigPage() {
               {pendientesConfig.map((h) => (
                 <button
                   key={h.id}
-                  onClick={async () => {
-                    await db.horarios
-                      .where({ esPrincipal: "true" })
-                      .modify({ esPrincipal: "false" });
-                    await db.horarios.update(h.id, { esPrincipal: "true" });
-                    const currentFormat = perfilActual?.formatoHora || 24;
-                    await db.perfil.clear();
-                    await db.perfil.add({
-                      nombre: h.nombreUsuario,
-                      id: "usuario_principal",
-                      actualizado: Date.now(),
-                      formatoHora: currentFormat,
-                    });
-                    setPendientesConfig([]);
-                    setStatus({
-                      type: "success",
-                      msg: `Perfil: ${h.nombreUsuario}`,
-                    });
-                  }}
+                  onClick={() => establecerComoYo(h)}
                   className="bg-white/10 hover:bg-white text-white hover:text-tec-blue p-4 rounded-2xl transition-all font-black text-[10px] uppercase truncate shadow-md"
                 >
                   {h.nombreUsuario}
@@ -295,32 +380,64 @@ export default function ConfigPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* BOTÓN PARA EDITAR MI PROPIO HORARIO */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 onClick={() => setShowManual(true)}
                 className="flex items-center gap-4 p-5 bg-tec-blue/10 border border-tec-blue/20 rounded-2xl hover:bg-tec-blue/20 transition-all text-left group"
               >
-                <div className="w-12 h-12 bg-tec-blue/20 rounded-xl flex items-center justify-center text-tec-blue group-hover:scale-110 transition-transform">
-                  <Edit3 size={24} />
+                <div className="w-10 h-10 bg-tec-blue/20 rounded-xl flex items-center justify-center text-tec-blue group-hover:scale-110 transition-transform">
+                  <Edit3 size={20} />
                 </div>
                 <div>
-                  <p className="font-black text-sm uppercase text-white">
-                    Editar Horario
+                  <p className="font-black text-[11px] uppercase text-white">
+                    Editar Manual
                   </p>
-                  <p className="text-[9px] text-gray-500 uppercase font-bold">
-                    Modificar mis materias
+                  <p className="text-[8px] text-gray-500 uppercase font-bold">
+                    Modificar materias
                   </p>
                 </div>
               </button>
 
-              <label className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all">
-                <FileUp size={24} className="text-tec-blue" />
+              {/* BOTÓN: ELEGIR DE AMIGOS - SE ILUMINA CON FDO_SUCCESS */}
+              <button
+                onClick={() => setShowVinculaModal(true)}
+                className={`flex items-center gap-4 p-5 border rounded-2xl transition-all text-left group relative overflow-hidden ${
+                  isFdoSuccess
+                    ? "bg-tec-blue/30 border-tec-blue shadow-[0_0_20px_rgba(0,112,243,0.3)] animate-pulse"
+                    : "bg-white/5 border-white/10 hover:bg-white/10"
+                }`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${isFdoSuccess ? "bg-tec-blue text-white" : "bg-white/10 text-white"}`}
+                >
+                  <Users size={20} />
+                </div>
                 <div>
-                  <p className="font-black text-sm uppercase text-white">
+                  <p className="font-black text-[11px] uppercase text-white">
+                    Elegir de Amigos
+                  </p>
+                  <p
+                    className={`text-[8px] uppercase font-bold ${isFdoSuccess ? "text-tec-blue" : "text-gray-500"}`}
+                  >
+                    {isFdoSuccess ? "¡Archivo cargado!" : "Promover perfil"}
+                  </p>
+                </div>
+                {isFdoSuccess && (
+                  <div className="absolute top-0 right-0 p-1">
+                    <div className="w-2 h-2 bg-tec-blue rounded-full animate-ping"></div>
+                  </div>
+                )}
+              </button>
+
+              <label className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl cursor-pointer hover:bg-white/10 transition-all">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-tec-blue">
+                  <FileUp size={20} />
+                </div>
+                <div>
+                  <p className="font-black text-[11px] uppercase text-white">
                     Subir nuevo CSV
                   </p>
-                  <p className="text-[9px] text-gray-500 uppercase font-bold">
+                  <p className="text-[8px] text-gray-500 uppercase font-bold">
                     Reemplazar actual
                   </p>
                 </div>
@@ -365,7 +482,6 @@ export default function ConfigPage() {
           </div>
         </section>
 
-        {/* SECCIÓN RESPALDO */}
         <section className="bg-card-bg p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-3 text-accent-purple mb-6 text-xl font-black uppercase tracking-tight text-white">
             <Share2 size={24} /> Respaldo
@@ -377,17 +493,17 @@ export default function ConfigPage() {
             >
               <Download size={32} className="text-accent-purple" />
               <p className="font-black text-xs uppercase text-white">
-                Exportar JSON
+                Exportar Datos
               </p>
             </button>
             <label className="flex flex-col items-center justify-center gap-3 bg-accent-purple/10 border border-accent-purple/20 p-8 rounded-3xl cursor-pointer hover:bg-accent-purple/20 transition-all">
               <FileUp size={32} className="text-accent-purple" />
               <p className="font-black text-xs uppercase text-white">
-                Importar JSON
+                Importar .json o .fdo
               </p>
               <input
                 type="file"
-                accept=".json"
+                accept=".json,.fdo"
                 className="hidden"
                 onChange={importarNetworkJSON}
               />
@@ -413,7 +529,6 @@ export default function ConfigPage() {
 
       {showInfoModal && <GuiaCSV onClose={() => setShowInfoModal(false)} />}
 
-      {/* MODAL EXPORTACIÓN */}
       {mostrarExportModal && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4 backdrop-blur-md bg-black/80"
@@ -453,13 +568,22 @@ export default function ConfigPage() {
                 </div>
               ))}
             </div>
-            <button
-              onClick={confirmarExportar}
-              disabled={seleccionados.length === 0}
-              className="w-full mt-6 bg-tec-blue p-4 rounded-xl font-black uppercase text-xs text-white"
-            >
-              Descargar JSON ({seleccionados.length})
-            </button>
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <button
+                onClick={ejecutarExportacionFdo}
+                disabled={seleccionados.length === 0}
+                className="bg-tec-blue p-4 rounded-xl font-black uppercase text-[10px] text-white flex flex-col items-center gap-2 hover:bg-blue-600 transition-all disabled:opacity-50"
+              >
+                <FileCode size={20} /> Descargar .fdo
+              </button>
+              <button
+                onClick={confirmarExportar}
+                disabled={seleccionados.length === 0}
+                className="bg-white/10 p-4 rounded-xl font-black uppercase text-[10px] text-white flex flex-col items-center gap-2 hover:bg-white/20 transition-all disabled:opacity-50"
+              >
+                <Download size={20} /> Descargar .json
+              </button>
+            </div>
           </div>
         </div>
       )}

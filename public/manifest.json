@@ -17,5 +17,22 @@
       "sizes": "512x512",
       "type": "image/png"
     }
+  ],
+  "file_handlers": [
+    {
+      "action": "/importar-archivo",
+      "accept": {
+        "application/json": [".json"],
+        "application/x-fdo": [".fdo"]
+      },
+      "icons": [
+        {
+          "src": "/icons/file-fdo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ],
+      "launch_type": "single-client"
+    }
   ]
 }
