@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react"; // 1. Añadimos Suspense a los imports
 import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
@@ -20,21 +20,22 @@ import {
   Clock,
   Edit3,
   FileCode,
-  Users, // Icono para vincular desde amigos
+  Users,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useSearchParams } from "next/navigation"; // Importado para detectar el status
+import { useSearchParams } from "next/navigation";
 
-export default function ConfigPage() {
+// 2. Extraemos el contenido original a un componente interno
+function ConfigContent() {
   const searchParams = useSearchParams();
-  const isFdoSuccess = searchParams.get("status") === "fdo_success"; // Detectar el parámetro
+  const isFdoSuccess = searchParams.get("status") === "fdo_success";
 
   const [nombre, setNombre] = useState("");
   const [status, setStatus] = useState({ type: "", msg: "" });
   const [visible, setVisible] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showManual, setShowManual] = useState(false);
-  const [showVinculaModal, setShowVinculaModal] = useState(false); // Modal de amigos
+  const [showVinculaModal, setShowVinculaModal] = useState(false);
 
   const [pendientesConfig, setPendientesConfig] = useState([]);
   const [mostrarExportModal, setMostrarExportModal] = useState(false);
@@ -42,14 +43,12 @@ export default function ConfigPage() {
 
   const topRef = useRef(null);
 
-  // --- CONSULTAS ---
   const perfilActual = useLiveQuery(() => db.perfil.toCollection().first());
   const miHorarioActual = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
   const todosLosHorariosRaw = useLiveQuery(() => db.horarios.toArray());
 
-  // Filtrar solo amigos (los que no son "yo")
   const misAmigos = (todosLosHorariosRaw || []).filter(
     (h) => h.esPrincipal === "false",
   );
@@ -74,16 +73,12 @@ export default function ConfigPage() {
     }
   }, [status.msg]);
 
-  // --- FUNCIÓN PARA PASAR UN AMIGO A "YO" ---
   const establecerComoYo = async (amigo) => {
     try {
-      // 1. Quitar marca de principal a todos
       await db.horarios
         .where({ esPrincipal: "true" })
         .modify({ esPrincipal: "false" });
-      // 2. Poner al amigo seleccionado como principal
       await db.horarios.update(amigo.id, { esPrincipal: "true" });
-      // 3. Actualizar tabla perfil
       const currentFormat = perfilActual?.formatoHora || 24;
       await db.perfil.clear();
       await db.perfil.add({
@@ -318,7 +313,6 @@ export default function ConfigPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-8">
-        {/* SECCIÓN SI HAY IMPORTACIONES PENDIENTES */}
         {pendientesConfig.length > 0 && (
           <section className="bg-tec-blue p-8 rounded-[2.5rem] shadow-2xl border border-white/20 animate-in slide-in-from-top-4">
             <h2 className="text-xl font-black uppercase text-white mb-4 flex items-center gap-2">
@@ -398,7 +392,6 @@ export default function ConfigPage() {
                 </div>
               </button>
 
-              {/* BOTÓN: ELEGIR DE AMIGOS - SE ILUMINA CON FDO_SUCCESS */}
               <button
                 onClick={() => setShowVinculaModal(true)}
                 className={`flex items-center gap-4 p-5 border rounded-2xl transition-all text-left group relative overflow-hidden ${
@@ -588,5 +581,20 @@ export default function ConfigPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// 3. El componente que exportamos envuelve todo en Suspense
+export default function ConfigPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-white p-10 font-black uppercase">
+          Cargando Ajustes...
+        </div>
+      }
+    >
+      <ConfigContent />
+    </Suspense>
   );
 }
