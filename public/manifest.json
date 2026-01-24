@@ -34,5 +34,18 @@
       ],
       "launch_type": "single-client"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/importar-archivo",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "file",
+          "accept": [".fdo", ".json"]
+        }
+      ]
+    }
+  }
 }

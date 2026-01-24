@@ -41,6 +41,38 @@ export default function ImportarArchivoPage() {
     }
   }, [router]);
 
+  useEffect(() => {
+    // ANDROID / SHARE TARGET
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", async (event) => {
+        if (event.data?.type === "IMPORT_FILE") {
+          try {
+            const content = event.data.content;
+            const data = JSON.parse(content);
+            const items = Array.isArray(data) ? data : [data];
+
+            for (const item of items) {
+              const { id, ...datosSinId } = item;
+              await db.horarios.add({
+                ...datosSinId,
+                id: `fdo_${Date.now()}_${Math.random()
+                  .toString(36)
+                  .substr(2, 4)}`,
+                esPrincipal: "false",
+              });
+            }
+
+            router.push("/config?status=fdo_success");
+          } catch (e) {
+            console.error("Fallo al importar desde compartir:", e);
+            alert("El archivo .fdo está dañado o no es válido.");
+            router.push("/amigos");
+          }
+        }
+      });
+    }
+  }, [router]);
+
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
       <div className="p-10 bg-card-bg border border-white/10 rounded-[3rem] text-center space-y-4 shadow-2xl">

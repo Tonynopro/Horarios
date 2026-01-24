@@ -392,4 +392,46 @@ define(["./workbox-f1770938"], function (e) {
         }),
     );
   });
+  // ✅ SHARE TARGET (ANDROID)
+  self.addEventListener("fetch", (event) => {
+    const url = new URL(event.request.url);
+
+    if (
+      event.request.method === "POST" &&
+      url.pathname === "/importar-archivo"
+    ) {
+      event.respondWith(
+        (async () => {
+          try {
+            const formData = await event.request.formData();
+            const file = formData.get("file");
+
+            if (!file) {
+              return Response.redirect("/importar-archivo?error=no-file", 303);
+            }
+
+            const text = await file.text();
+
+            const clientsList = await self.clients.matchAll({
+              type: "window",
+              includeUncontrolled: true,
+            });
+
+            for (const client of clientsList) {
+              client.postMessage({
+                type: "IMPORT_FILE",
+                content: text,
+                name: file.name,
+              });
+            }
+
+            return Response.redirect("/importar-archivo", 303);
+          } catch (err) {
+            console.error("Error en share_target:", err);
+            return Response.redirect("/importar-archivo?error=invalid", 303);
+          }
+        })(),
+      );
+    }
+  });
 });
