@@ -22,8 +22,8 @@
     {
       "action": "/importar-archivo",
       "accept": {
-        "application/json": [".json"],
-        "application/x-fdo": [".fdo"]
+        "text/plain": [".fdo"],
+        "application/json": [".json", ".fdo"]
       },
       "icons": [
         {
