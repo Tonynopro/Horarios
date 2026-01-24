@@ -78,7 +78,7 @@ export default function ImportarArchivoPage() {
       <div className="p-10 bg-card-bg border border-white/10 rounded-[3rem] text-center space-y-4 shadow-2xl">
         <div className="w-16 h-16 border-4 border-tec-blue border-t-transparent rounded-full animate-spin mx-auto"></div>
         <h2 className="text-xl font-black uppercase italic tracking-tighter">
-          Abriendo archivo .FDO
+          Abriendo archivo...
         </h2>
         <p className="text-[10px] text-gray-500 font-bold uppercase">
           Sincronizando con Network...
