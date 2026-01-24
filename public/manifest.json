@@ -27,7 +27,7 @@
       },
       "icons": [
         {
-          "src": "/icons/file-fdo.png",
+          "src": "/icons/icon-512x512.png",
           "sizes": "512x512",
           "type": "image/png"
         }
