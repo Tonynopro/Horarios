@@ -122,7 +122,6 @@ export default function Sidebar() {
           if (suClase && suClase.rango === rangoBuscado) {
             const esMismaClase =
               claseHoy &&
-              suClase.nombre.toLowerCase() === claseHoy.nombre.toLowerCase() &&
               suClase.salon.toLowerCase() === claseHoy.salon.toLowerCase();
             return { ...amigo, claseActual: suClase, esMismaClase };
           }
