@@ -4,8 +4,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import HorarioGrid from "@/components/HorarioGrid";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
-import GuiaCSV from "@/components/GuiaCSV"; // Importamos el componente reutilizable
+import GuiaCSV from "@/components/GuiaCSV";
 import { transformarCSV, obtenerClaseActual } from "@/lib/parser";
+import { toPng } from "html-to-image"; // Librería para la exportación
 import {
   Users,
   Check,
@@ -14,13 +15,12 @@ import {
   Share2,
   Info,
   ShieldCheck,
-  X,
   RefreshCcw,
-  Table as TableIcon,
-  FileType,
   CheckCircle2,
   AlertCircle,
   Keyboard,
+  Camera,
+  Download,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -30,16 +30,55 @@ export default function HomePage() {
   const [pasoSeleccion, setPasoSeleccion] = useState(null);
   const [mostrarAvisoOmitir, setMostrarAvisoOmitir] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [isExporting, setIsExporting] = useState(false); // Estado para la cámara
 
   // --- CONSULTAS ---
   const miHorario = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
-  const todosLosAmigos = useLiveQuery(() =>
-    db.horarios.where({ esPrincipal: "false" }).toArray(),
-  );
+
+  // CAMBIO AQUÍ: Se añade .sortBy("nombreUsuario") para el orden alfabético
+  const todosLosAmigos =
+    useLiveQuery(() =>
+      db.horarios.where({ esPrincipal: "false" }).sortBy("nombreUsuario"),
+    ) || [];
+
   const totalPerfiles = useLiveQuery(() => db.horarios.count()) || 0;
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
+
+  // --- LÓGICA DE EXPORTACIÓN ---
+  const exportarImagen = async () => {
+    const node = document.getElementById("horario-completo");
+    if (!node) return;
+
+    setIsExporting(true);
+    try {
+      // Ocultamos temporalmente las flechas de navegación para que no salgan en la foto
+      const flechas = document.querySelectorAll(".flecha-nav");
+      flechas.forEach((f) => (f.style.opacity = "0"));
+
+      const dataUrl = await toPng(node, {
+        backgroundColor: "#0b0b0b", // Fondo oscuro para que combine con el diseño
+        pixelRatio: 2, // Doble resolución para que se vea nítido en el cel
+        style: {
+          borderRadius: "2rem",
+        },
+      });
+
+      const link = document.createElement("a");
+      link.download = `NetworkTec-Horario-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      // Devolvemos la visibilidad a las flechas
+      flechas.forEach((f) => (f.style.opacity = "1"));
+    } catch (err) {
+      console.error("Error al exportar:", err);
+      alert("Hubo un error al generar la imagen.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // --- FUNCIONES DE LÓGICA ---
   const toggleAmigo = (id) => {
@@ -289,7 +328,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* MODAL INFO REEMPLAZADO POR COMPONENTE REUTILIZABLE */}
         {showInfo && <GuiaCSV onClose={() => setShowInfo(false)} />}
       </div>
     );
@@ -302,23 +340,40 @@ export default function HomePage() {
       : todosLosAmigos?.find((a) => a.id === viewId);
 
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in max-w-6xl mx-auto px-2">
+    <div className="space-y-6 pb-24 animate-in fade-in max-w-6xl mx-auto px-2 pt-6">
       <header className="flex flex-col gap-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl md:text-5xl font-black italic tracking-tighter uppercase text-white">
-            Dashboard
-          </h1>
-          <button
-            onClick={() => window.location.reload()}
-            className="p-2 bg-white/5 rounded-xl text-gray-500 hover:text-white transition-colors"
-          >
-            <RefreshCcw size={16} />
-          </button>
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-4xl md:text-6xl font-black italic tracking-tighter uppercase text-white leading-none">
+              Dashboard
+            </h1>
+            <p className="text-tec-blue text-[10px] font-black tracking-[0.3em] uppercase mt-2">
+              Network Tec
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {/* BOTÓN DE EXPORTACIÓN */}
+            <button
+              onClick={exportarImagen}
+              disabled={isExporting}
+              className={`p-3 bg-white/5 rounded-2xl text-tec-blue hover:bg-tec-blue hover:text-white transition-all border border-white/10 ${isExporting ? "animate-pulse opacity-50" : ""}`}
+            >
+              {isExporting ? <Download size={20} /> : <Camera size={20} />}
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="p-3 bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-all border border-white/10"
+            >
+              <RefreshCcw size={20} />
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5 p-2 bg-white/5 rounded-2xl border border-white/10">
-          <div className="flex items-center gap-2 px-2 border-r border-white/10">
-            <Filter size={10} className="text-gray-500" />
-            <span className="text-[8px] font-black uppercase text-gray-500">
+
+        {/* FILTROS DE COMPARACIÓN */}
+        <div className="flex flex-wrap gap-2 p-3 bg-white/[0.02] rounded-3xl border border-white/5 backdrop-blur-md">
+          <div className="flex items-center gap-2 px-3 border-r border-white/10">
+            <Filter size={12} className="text-gray-500" />
+            <span className="text-[10px] font-black uppercase text-gray-500">
               Comparar:
             </span>
           </div>
@@ -326,13 +381,12 @@ export default function HomePage() {
             <button
               key={amigo.id}
               onClick={() => toggleAmigo(amigo.id)}
-              className={`px-2.5 py-1 rounded-full text-[9px] font-bold transition-all flex items-center gap-1.5 ${
+              className={`px-4 py-1.5 rounded-xl text-[10px] font-black transition-all border ${
                 amigosActivos.includes(amigo.id)
-                  ? "bg-tec-blue text-white shadow-md"
-                  : "bg-white/5 text-gray-400 border border-white/5"
+                  ? "bg-tec-blue border-tec-blue text-white shadow-md shadow-blue-900/40"
+                  : "bg-white/5 border-white/5 text-gray-400"
               }`}
             >
-              {amigosActivos.includes(amigo.id) && <Check size={10} />}{" "}
               {amigo.nombreUsuario}
             </button>
           ))}
@@ -343,7 +397,9 @@ export default function HomePage() {
           )}
         </div>
       </header>
-      <div className="bg-card-bg/30 rounded-[2.5rem] border border-white/5 p-3 md:p-6 backdrop-blur-xl overflow-hidden shadow-2xl">
+
+      {/* ÁREA DEL GRID - EL WRAPPER TIENE EL ESTILO DEL DASHBOARD */}
+      <div className="bg-card-bg/30 rounded-[3rem] border border-white/5 p-2 md:p-6 backdrop-blur-xl overflow-hidden shadow-2xl">
         <HorarioGrid
           horario={horarioAMostrar}
           compararCon={todosLosAmigos?.filter((a) =>
@@ -351,35 +407,6 @@ export default function HomePage() {
           )}
         />
       </div>
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-5 bg-tec-blue/10 rounded-[2rem] border border-tec-blue/20">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-tec-blue mb-3 flex items-center gap-2">
-            <Users size={12} /> Coincidencias Ahora
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {todosLosAmigos?.map((amigo) => {
-              const miClase = obtenerClaseActual(miHorario?.materias);
-              const suClase = obtenerClaseActual(amigo.materias);
-              if (miClase && suClase && miClase.rango === suClase.rango) {
-                return (
-                  <span
-                    key={amigo.id}
-                    className="bg-tec-blue text-white px-2.5 py-1 rounded-lg text-[9px] font-bold shadow-sm uppercase"
-                  >
-                    {amigo.nombreUsuario}
-                  </span>
-                );
-              }
-              return null;
-            })}
-            {(!miHorario || todosLosAmigos.length === 0) && (
-              <span className="text-[9px] text-gray-600 font-bold uppercase italic">
-                Buscando coincidencias...
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

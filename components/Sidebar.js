@@ -10,6 +10,7 @@ import {
   X,
   ChevronUp,
   GraduationCap,
+  Clock, // Icono para la próxima clase
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -21,7 +22,7 @@ import { useEffect, useState } from "react";
 export default function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [ahora, setAhora] = useState(null);
+  const [ahora, setAhora] = useState(new Date());
   const [showMobileDrawer, setShowMobileDrawer] = useState(false);
 
   const bloquesTec = [
@@ -42,50 +43,40 @@ export default function Sidebar() {
     "21:00 - 22:00",
   ];
 
+  // --- EFECTO DE SINCRONIZACIÓN Y TIEMPO ---
   useEffect(() => {
     setMounted(true);
-
-    setMounted(true);
-
-    // Solicitar permiso de notificaciones al cargar
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
-    const actualizarTodo = () => {
-      setAhora(new Date());
-    };
+    let intervalId;
+    let timeoutId;
+    const actualizarTodo = () => setAhora(new Date());
 
-    actualizarTodo(); // Ejecución inmediata al cargar
-
-    // FUNCIÓN MÁGICA DE SINCRONIZACIÓN
     const sincronizar = () => {
       const ahoraMismo = new Date();
-      // Calculamos cuántos milisegundos faltan para el segundo 0 del siguiente minuto
       const msParaElSiguienteMinuto =
         1000 -
         ahoraMismo.getMilliseconds() +
         (59 - ahoraMismo.getSeconds()) * 1000;
 
-      setTimeout(() => {
-        actualizarTodo(); // Esto ocurrirá exactamente al segundo :00
-        // Una vez sincronizados, repetimos cada minuto
-        setInterval(actualizarTodo, 60000);
+      timeoutId = setTimeout(() => {
+        actualizarTodo();
+        intervalId = setInterval(actualizarTodo, 60000);
       }, msParaElSiguienteMinuto);
     };
 
     sincronizar();
-
     return () => {
-      // Limpieza de timers para evitar fugas de memoria
-      const ids = setTimeout(() => {});
-      for (let i = 0; i < ids; i++) clearTimeout(i);
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
     };
   }, []);
 
+  // --- CONSULTAS DE BASE DE DATOS ---
   const perfil = useLiveQuery(() => db.perfil.toCollection().first());
   const formatoHora = perfil?.formatoHora || 24;
-
   const horario = useLiveQuery(() =>
     db.horarios.where({ esPrincipal: "true" }).first(),
   );
@@ -93,11 +84,49 @@ export default function Sidebar() {
     db.horarios.where({ esPrincipal: "false" }).toArray(),
   );
 
+  // --- LÓGICA DE CLASES (ACTUAL Y PRÓXIMA) ---
   const claseHoy = ahora ? obtenerClaseActual(horario?.materias) : null;
+  const proximaClase = ahora
+    ? (() => {
+        const unaHoraMas = new Date(ahora.getTime() + 60 * 60 * 1000);
+        return obtenerClaseActual(horario?.materias, unaHoraMas);
+      })()
+    : null;
+
   const horaActualNum = ahora ? ahora.getHours() * 100 + ahora.getMinutes() : 0;
   const estaCerrado = ahora
     ? ahora.getHours() < 7 || ahora.getHours() >= 22
     : true;
+
+  // --- NUEVA LÓGICA: SITUACIÓN ESCOLAR ---
+  const situacionEscolar = (() => {
+    if (!horario?.materias) return "Sin horario";
+    const diaSemana = [
+      "domingo",
+      "lunes",
+      "martes",
+      "miercoles",
+      "jueves",
+      "viernes",
+      "sabado",
+    ][ahora.getDay()];
+    const materiasDeHoy = horario.materias.filter((m) => m.dia === diaSemana);
+
+    if (materiasDeHoy.length === 0) return "Sin clases hoy";
+
+    // Calculamos límites de hoy
+    const tiempos = materiasDeHoy.map((m) => ({
+      ini: parseInt(m.inicio.replace(":", "")),
+      fin: parseInt(m.fin.replace(":", "")),
+    }));
+    const primeraEntrada = Math.min(...tiempos.map((t) => t.ini));
+    const ultimaSalida = Math.max(...tiempos.map((t) => t.fin));
+
+    if (claseHoy) return "En Clase";
+    if (horaActualNum < primeraEntrada) return "Aún no entro";
+    if (horaActualNum >= ultimaSalida) return "Ya salí";
+    return "Libre";
+  })();
 
   const rangoActualRaw = ahora
     ? bloquesTec.find((bloque) => {
@@ -114,6 +143,7 @@ export default function Sidebar() {
     formatoHora,
   );
 
+  // --- LÓGICA DE AMIGOS (PRIORIDAD MISMA CLASE + ALFABÉTICO) ---
   const amigosEnClaseAhora = ahora
     ? (amigos || [])
         .map((amigo) => {
@@ -128,13 +158,17 @@ export default function Sidebar() {
           return null;
         })
         .filter(Boolean)
+        .sort((a, b) => {
+          if (a.esMismaClase && !b.esMismaClase) return -1;
+          if (!a.esMismaClase && b.esMismaClase) return 1;
+          return a.nombreUsuario.localeCompare(b.nombreUsuario);
+        })
     : [];
 
+  // --- SYNC CON SERVICE WORKER ---
   useEffect(() => {
-    // Solo si hay una clase y el navegador soporta Service Workers
     if (claseHoy && "serviceWorker" in navigator) {
       navigator.serviceWorker.ready.then((registration) => {
-        // Enviamos la info de la clase al sw.js
         registration.active.postMessage({
           type: "NUEVA_CLASE",
           payload: {
@@ -146,7 +180,7 @@ export default function Sidebar() {
         });
       });
     }
-  }, [claseHoy?.nombre, claseHoy?.rango]); // Solo se dispara cuando cambia la clase
+  }, [claseHoy?.nombre, claseHoy?.rango, formatoHora]);
 
   const menuItems = [
     { icon: <Home size={20} />, label: "Mi Horario", href: "/" },
@@ -155,16 +189,11 @@ export default function Sidebar() {
   ];
 
   const tieneContenido =
-    (claseHoy || amigosEnClaseAhora.length > 0) && !estaCerrado;
+    claseHoy || amigosEnClaseAhora.length > 0 || !estaCerrado;
 
-  // Componente Reutilizable para la tarjeta de amigo (Móvil y Escritorio)
   const FriendCard = ({ amigo }) => (
     <div
-      className={`p-3 rounded-2xl border transition-all duration-300 ${
-        amigo.esMismaClase
-          ? "bg-green-500/10 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.1)]"
-          : "bg-white/[0.03] border-white/5"
-      }`}
+      className={`p-3 rounded-2xl border transition-all duration-300 ${amigo.esMismaClase ? "bg-green-500/10 border-green-500/40 shadow-[0_0_15px_rgba(34,197,94,0.1)]" : "bg-white/[0.03] border-white/5"}`}
     >
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2 overflow-hidden">
@@ -189,12 +218,6 @@ export default function Sidebar() {
       <p className="text-[9px] text-gray-500 font-bold uppercase truncate">
         {amigo.claseActual.nombre}
       </p>
-      {/* PROFESOR DEL AMIGO */}
-      {amigo.claseActual.profesor && (
-        <p className="text-[8px] text-gray-600 font-bold uppercase truncate mt-0.5 italic">
-          {amigo.claseActual.profesor}
-        </p>
-      )}
     </div>
   );
 
@@ -207,32 +230,56 @@ export default function Sidebar() {
         {tieneContenido && (
           <div
             onClick={() => setShowMobileDrawer(true)}
-            className="fixed bottom-20 left-4 right-4 bg-card-bg/95 border border-tec-blue/40 p-3 rounded-2xl shadow-2xl flex items-center justify-between z-[45] backdrop-blur-md active:scale-95 transition-all"
+            className="fixed bottom-20 left-4 right-4 bg-card-bg/95 border border-tec-blue/40 p-4 rounded-2xl shadow-2xl z-[45] backdrop-blur-md active:scale-95 transition-all"
           >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Zap
-                  size={16}
-                  className={`${claseHoy ? "text-tec-blue fill-tec-blue" : "text-gray-500"}`}
-                />
-                {amigosEnClaseAhora.length > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-card-bg">
-                    {amigosEnClaseAhora.length}
-                  </span>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Zap
+                      size={18}
+                      className={`${claseHoy ? "text-tec-blue fill-tec-blue" : "text-gray-500"}`}
+                    />
+                    {amigosEnClaseAhora.length > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-green-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-card-bg">
+                        {amigosEnClaseAhora.length}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase text-tec-blue leading-none mb-1">
+                      {situacionEscolar}
+                    </p>
+                    <p className="text-sm font-bold text-white/90 truncate max-w-[200px]">
+                      {claseHoy
+                        ? claseHoy.nombre
+                        : situacionEscolar === "Libre"
+                          ? "Tienes un hueco"
+                          : situacionEscolar}
+                    </p>
+                  </div>
+                </div>
+                <ChevronUp size={18} className="text-gray-500 animate-bounce" />
+              </div>
+
+              {proximaClase &&
+                !estaCerrado &&
+                situacionEscolar !== "Ya salí" && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                    <Clock size={12} className="text-amber-400" />
+                    <p className="text-[10px] text-gray-400 font-medium">
+                      Siguiente:{" "}
+                      <span className="text-white font-bold">
+                        {proximaClase.nombre}
+                      </span>{" "}
+                      en{" "}
+                      <span className="text-tec-blue font-bold">
+                        {proximaClase.salon}
+                      </span>
+                    </p>
+                  </div>
                 )}
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase text-tec-blue leading-none mb-1">
-                  {claseHoy ? "Tu Clase" : "Amigos en Clase"}
-                </p>
-                <p className="text-[11px] font-bold text-white/90 truncate max-w-[180px]">
-                  {claseHoy
-                    ? claseHoy.nombre
-                    : `${amigosEnClaseAhora.length} amigos ocupados`}
-                </p>
-              </div>
             </div>
-            <ChevronUp size={16} className="text-gray-500 animate-bounce" />
           </div>
         )}
 
@@ -249,14 +296,15 @@ export default function Sidebar() {
                   <h3 className="text-2xl font-black italic text-white uppercase leading-none">
                     {claseHoy
                       ? formatearRango(claseHoy.rango, formatoHora)
-                      : rangoActualSistema}
+                      : situacionEscolar === "Aún no entro"
+                        ? "Antes de entrar"
+                        : rangoActualSistema}
                   </h3>
                   {claseHoy && (
                     <>
                       <p className="text-tec-blue font-bold text-sm mt-1 uppercase">
                         {claseHoy.nombre}
                       </p>
-                      {/* PROFESOR EN CAJÓN MÓVIL */}
                       {claseHoy.profesor && (
                         <p className="text-gray-400 text-[10px] font-bold uppercase mt-1 flex items-center gap-1">
                           <GraduationCap size={12} className="text-tec-blue" />{" "}
@@ -298,64 +346,103 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* --- SIDEBAR ESCRITORIO --- */}
+      {/* --- UI ESCRITORIO --- */}
       <aside className="w-72 bg-card-bg border-r border-white/5 flex flex-col p-6 hidden md:flex h-screen sticky top-0 overflow-y-auto no-scrollbar">
-        <div className="mb-8">
-          <h2 className="text-tec-blue font-black text-2xl tracking-tighter italic uppercase">
-            TEC MADERO
-          </h2>
-          <div className="mt-4 p-4 bg-white/[0.03] rounded-2xl border border-white/5">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-tec-blue/20 flex items-center justify-center text-tec-blue font-black text-xl border border-tec-blue/30">
-                {perfil?.nombre ? (
-                  perfil.nombre[0].toUpperCase()
-                ) : (
-                  <User size={20} />
-                )}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">
-                  Estudiante
-                </p>
-                <span className="text-md font-black truncate block text-white/90">
-                  {perfil?.nombre || "Invitado"}
-                </span>
-              </div>
-            </div>
+        <h2 className="text-tec-blue font-black text-2xl tracking-tighter italic uppercase mb-8">
+          TEC MADERO
+        </h2>
+
+        <div className="mb-6 p-4 bg-white/[0.03] rounded-2xl border border-white/5 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-tec-blue/20 flex items-center justify-center text-tec-blue font-black text-xl border border-tec-blue/30">
+            {perfil?.nombre ? (
+              perfil.nombre[0].toUpperCase()
+            ) : (
+              <User size={20} />
+            )}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">
+              Estudiante
+            </p>
+            <span className="text-md font-black truncate block text-white/90">
+              {perfil?.nombre || "Invitado"}
+            </span>
           </div>
         </div>
 
+        {/* TARJETA DE SITUACIÓN ACTUAL */}
         <div
-          className={`mb-6 p-4 rounded-2xl border flex flex-col gap-1 ${estaCerrado ? "bg-red-500/5 border-red-500/20" : "bg-white/[0.02] border-white/10 shadow-lg"}`}
+          className={`mb-6 p-5 rounded-[2.2rem] border transition-all ${claseHoy ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40" : situacionEscolar === "Ya salí" ? "bg-red-500/5 border-red-500/20" : "bg-white/[0.02] border-white/5"}`}
         >
-          <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-500 tracking-widest">
-            <span>Estado Actual</span>
-            <div
-              className={`w-2 h-2 rounded-full ${estaCerrado ? "bg-red-500" : "bg-green-500 animate-pulse"}`}
+          <div className="flex items-center gap-2 mb-3">
+            <Zap
+              size={14}
+              className={
+                claseHoy
+                  ? "text-tec-blue fill-tec-blue"
+                  : situacionEscolar === "Aún no entro"
+                    ? "text-amber-500"
+                    : "text-gray-600"
+              }
             />
+            <span className="text-[10px] font-black uppercase text-gray-400">
+              {situacionEscolar}
+            </span>
           </div>
-          <p
-            suppressHydrationWarning
-            className="text-lg font-mono font-black text-white/80 uppercase"
-          >
-            {estaCerrado ? "CERRADO" : rangoActualSistema}
-          </p>
+          {claseHoy ? (
+            <div>
+              <p className="text-lg font-black leading-tight text-white">
+                {formatearRango(claseHoy.rango, formatoHora)}
+              </p>
+              <p className="text-xs text-gray-400 font-bold uppercase mt-1 italic">
+                {claseHoy.nombre}
+              </p>
+              <div className="flex items-center gap-1 mt-2 text-tec-blue font-black uppercase text-[11px]">
+                <MapPin size={10} /> Aula: {claseHoy.salon}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+              {situacionEscolar === "Aún no entro"
+                ? "Día escolar por comenzar"
+                : situacionEscolar === "Ya salí"
+                  ? "Día escolar terminado"
+                  : "Disfruta tu tiempo libre"}
+            </p>
+          )}
         </div>
+
+        {proximaClase && !estaCerrado && situacionEscolar !== "Ya salí" && (
+          <div className="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl animate-in fade-in zoom-in duration-500">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock size={14} className="text-amber-500" />
+              <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
+                En 1 hora
+              </span>
+            </div>
+            <p className="text-xs font-black text-white uppercase leading-tight">
+              {proximaClase.nombre}
+            </p>
+            <p className="text-[10px] text-gray-500 font-bold mt-1">
+              S: {proximaClase.salon} • {proximaClase.profesor || "Sin Prof."}
+            </p>
+          </div>
+        )}
 
         <nav className="space-y-2 mb-8">
           {menuItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${pathname === item.href ? "bg-tec-blue text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+              className={`flex items-center gap-3 p-3.5 rounded-xl font-black text-sm transition-all ${pathname === item.href ? "bg-tec-blue text-white shadow-lg shadow-tec-blue/20" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
             >
-              {item.icon}
+              {item.icon}{" "}
               <span className="uppercase tracking-tight">{item.label}</span>
             </Link>
           ))}
         </nav>
 
-        {!estaCerrado && amigosEnClaseAhora.length > 0 && (
+        {amigosEnClaseAhora.length > 0 && (
           <div className="mb-8">
             <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-4 flex items-center gap-2">
               <Users size={12} /> Amigos en Clase
@@ -367,45 +454,6 @@ export default function Sidebar() {
             </div>
           </div>
         )}
-
-        <div
-          className={`mt-auto p-5 rounded-[2.2rem] border transition-all relative ${tieneContenido && claseHoy ? "bg-gradient-to-br from-tec-blue/20 to-black/40 border-tec-blue/40" : "bg-white/[0.02] border-white/5"}`}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <Zap
-              size={14}
-              className={
-                claseHoy ? "text-tec-blue fill-tec-blue" : "text-gray-600"
-              }
-            />
-            <span className="text-[10px] font-black uppercase text-gray-400">
-              {estaCerrado
-                ? "Fuera de Horario"
-                : claseHoy
-                  ? "En Clase"
-                  : "Libre"}
-            </span>
-          </div>
-          {claseHoy && (
-            <div>
-              <p className="text-lg font-black leading-tight text-white">
-                {formatearRango(claseHoy.rango, formatoHora)}
-              </p>
-              <p className="text-xs text-gray-400 font-bold uppercase mt-1 italic">
-                {claseHoy.nombre}
-              </p>
-              {/* PROFESOR EN TU CLASE (ESCRITORIO) */}
-              {claseHoy.profesor && (
-                <p className="text-[10px] text-white/40 font-bold uppercase mt-0.5 truncate">
-                  {claseHoy.profesor}
-                </p>
-              )}
-              <div className="flex items-center gap-1 mt-2 text-tec-blue font-black uppercase text-[11px]">
-                <MapPin size={10} /> Aula: {claseHoy.salon}
-              </div>
-            </div>
-          )}
-        </div>
       </aside>
     </aside>
   );
