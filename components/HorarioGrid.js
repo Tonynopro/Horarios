@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import { formatearRango } from "@/lib/parser";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 
+// Función interna para normalizar el matching de horas
+const normHora = (r) => r?.replace(/\s/g, "").toLowerCase() || "";
+
 export default function HorarioGrid({ horario, compararCon = [] }) {
   const scrollRef = useRef(null);
   const [showRightArrow, setShowRightArrow] = useState(true);
@@ -24,7 +27,12 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
       ...horario.materias,
       ...compararCon.flatMap((a) => a.materias),
     ];
-    return [...new Set(todas.map((m) => m.rango))].sort();
+    const mapa = new Map();
+    todas.forEach((m) => {
+      const n = normHora(m.rango);
+      if (!mapa.has(n)) mapa.set(n, m.rango);
+    });
+    return Array.from(mapa.values()).sort();
   }, [horario, compararCon]);
 
   const handleScroll = () => {
@@ -38,11 +46,9 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
 
   return (
     <div className="w-full relative overflow-hidden">
-      {/* FLECHAS FIJAS (GLASS STYLE) */}
       <div className="absolute inset-y-0 left-0 w-0 z-40 md:hidden pointer-events-none">
         {showLeftArrow && (
           <button
-            /* AGREGAMOS LA CLASE flecha-nav PARA EL EXPORTADOR */
             className="flecha-nav sticky top-1/2 -translate-y-1/2 ml-2 pointer-events-auto bg-black/60 backdrop-blur-xl p-2 rounded-xl border border-white/10 text-white shadow-2xl animate-in fade-in slide-in-from-left-2"
             onClick={() =>
               scrollRef.current.scrollBy({ left: -200, behavior: "smooth" })
@@ -56,7 +62,6 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
       <div className="absolute inset-y-0 right-0 w-0 z-40 md:hidden pointer-events-none">
         {showRightArrow && (
           <button
-            /* AGREGAMOS LA CLASE flecha-nav PARA EL EXPORTADOR */
             className="flecha-nav sticky top-1/2 -translate-y-1/2 -ml-12 mr-2 pointer-events-auto bg-black/60 backdrop-blur-xl p-2 rounded-xl border border-white/10 text-white shadow-2xl animate-in fade-in slide-in-from-right-2"
             onClick={() =>
               scrollRef.current.scrollBy({ left: 200, behavior: "smooth" })
@@ -73,7 +78,6 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
         className="overflow-x-auto pb-8 scrollbar-hide select-none"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        {/* AGREGAMOS EL ID horario-completo PARA LA CAPTURA DE IMAGEN */}
         <div
           id="horario-completo"
           className="min-w-[850px] grid grid-cols-6 gap-4 px-2"
@@ -97,10 +101,13 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
               </div>
               {dias.map((dia) => {
                 const miMateria = horario.materias.find(
-                  (m) => m.dia === dia && m.rango === rango,
+                  (m) => m.dia === dia && normHora(m.rango) === normHora(rango),
                 );
                 const amigos = compararCon.filter((a) =>
-                  a.materias.some((m) => m.dia === dia && m.rango === rango),
+                  a.materias.some(
+                    (m) =>
+                      m.dia === dia && normHora(m.rango) === normHora(rango),
+                  ),
                 );
                 return (
                   <div
@@ -111,6 +118,8 @@ export default function HorarioGrid({ horario, compararCon = [] }) {
                       materia={miMateria}
                       amigosAca={amigos}
                       esVacio={!miMateria}
+                      diaContexto={dia}
+                      rangoContexto={rango}
                     />
                   </div>
                 );
