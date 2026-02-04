@@ -20,7 +20,8 @@
     "next": "16.1.2",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-quick-pinch-zoom": "^5.1.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

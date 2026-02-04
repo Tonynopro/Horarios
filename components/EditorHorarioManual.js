@@ -1,35 +1,34 @@
 "use client";
 import { useState } from "react";
+import { db } from "@/lib/db";
 import {
   X,
   Plus,
   Save,
   Clock,
   Trash2,
-  AlertCircle,
   BookOpen,
   MapPin,
-  User, // Nuevo icono para el profesor
+  User,
 } from "lucide-react";
 
 export default function EditorHorarioManual({
   onSave,
   onCancel,
   nombreInicial = "",
-  materiasIniciales = [], // <-- Prop añadida para cargar datos existentes
+  materiasIniciales = [],
+  idUsuarioEditando = null, // <--- ID de a quién estamos editando (para no auto-actualizarlo doble)
+  amigosContexto = [], // <--- Lista de amigos
+  miHorario = null, // <--- Tu propio horario para que te actualice a ti también
 }) {
   const [nombre, setNombre] = useState(nombreInicial);
+  const [salonTemp, setSalonTemp] = useState("");
 
-  // Lógica de inicialización: Transforma el formato plano de la DB al formato de bloques del editor
   const [materias, setMaterias] = useState(() => {
     if (!materiasIniciales || materiasIniciales.length === 0) return [];
-
     const agrupadas = [];
-    // Recorremos las materias individuales (lunes 7-8, martes 7-8...)
     materiasIniciales.forEach((m) => {
       const rangoNormalizado = m.rango.replace(/\s/g, "");
-
-      // Buscamos si ya creamos un bloque para este nombre + salon + hora
       const existente = agrupadas.find(
         (a) =>
           a.nombre.toLowerCase() === m.nombre.toLowerCase() &&
@@ -41,10 +40,10 @@ export default function EditorHorarioManual({
         if (!existente.dias.includes(m.dia)) existente.dias.push(m.dia);
       } else {
         agrupadas.push({
-          id: Math.random(), // ID temporal para el renderizado del editor
+          id: Math.random(),
           nombre: m.nombre,
           salon: m.salon,
-          profesor: m.profesor || "", // Soporte para el nuevo campo
+          profesor: m.profesor || "",
           bloque: m.rango,
           dias: [m.dia],
         });
@@ -71,6 +70,88 @@ export default function EditorHorarioManual({
     "21:00 - 22:00",
   ];
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
+
+  // --- HELPER: Obtener UNIVERSO de gente (Amigos + Yo) ---
+  const obtenerPoolUsuarios = () => {
+    const pool = [...amigosContexto];
+    // Si yo existo y NO soy la persona que se está editando ahorita, agrégame al pool
+    if (miHorario && miHorario.id !== idUsuarioEditando) {
+      pool.push({ ...miHorario, esYo: true }); // Marcamos que soy yo para feedback visual
+    }
+    // Filtramos para NO incluir a la persona que ya estamos editando en el formulario
+    return pool.filter((u) => u.id !== idUsuarioEditando);
+  };
+
+  // --- LÓGICA DE ACTUALIZACIÓN MASIVA (SOLO POR SALÓN) ---
+  const verificarImpactoSocial = async (idMateriaEditada) => {
+    const materiaActual = materias.find((m) => m.id === idMateriaEditada);
+    if (!materiaActual) return;
+
+    const nuevoSalon = materiaActual.salon.trim();
+    const viejoSalon = salonTemp.trim(); // El que guardamos en onFocus
+
+    // Validaciones
+    if (!nuevoSalon || !viejoSalon || nuevoSalon === viejoSalon) return;
+
+    const pool = obtenerPoolUsuarios();
+    if (pool.length === 0) return;
+
+    // BUSCAMOS AFECTADOS
+    // Criterio estricto: Coincidir en SALÓN VIEJO + DÍA + HORA.
+    // (Ignoramos el nombre de la materia a propósito)
+    const afectados = [];
+
+    pool.forEach((usuario) => {
+      // Revisamos si el usuario tiene ALGUNA clase en ese salón, día y hora
+      const tieneClaseAhi = usuario.materias?.some(
+        (m) =>
+          m.salon.trim().toLowerCase() === viejoSalon.toLowerCase() && // Mismo salón viejo
+          m.rango === materiaActual.bloque && // Misma hora
+          materiaActual.dias.includes(m.dia), // Mismo día
+      );
+
+      if (tieneClaseAhi) {
+        afectados.push(usuario);
+      }
+    });
+
+    if (afectados.length === 0) return;
+
+    // PREGUNTAR AL USUARIO
+    const nombres = afectados
+      .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+      .join(", ");
+    const confirmar = window.confirm(
+      `CAMBIO DE SALÓN DETECTADO\n\n` +
+        `Las siguientes personas también tienen clase en el salón "${viejoSalon}" a esta hora:\n` +
+        `-> ${nombres}\n\n` +
+        `¿Quieres moverlos al nuevo salón "${nuevoSalon}" también?`,
+    );
+
+    // EJECUTAR CAMBIOS EN DB
+    if (confirmar) {
+      let actualizados = 0;
+      for (const usuario of afectados) {
+        const nuevasMaterias = usuario.materias.map((m) => {
+          // Si coincide con las condiciones (Salón viejo + hora + dia), actualizamos
+          if (
+            m.salon.trim().toLowerCase() === viejoSalon.toLowerCase() &&
+            m.rango === materiaActual.bloque &&
+            materiaActual.dias.includes(m.dia)
+          ) {
+            return { ...m, salon: nuevoSalon };
+          }
+          return m;
+        });
+
+        await db.horarios.update(usuario.id, { materias: nuevasMaterias });
+        actualizados++;
+      }
+      alert(`Se actualizó el horario de ${actualizados} persona(s).`);
+    }
+
+    setSalonTemp("");
+  };
 
   const agregarMateria = () => {
     setMaterias([
@@ -106,6 +187,22 @@ export default function EditorHorarioManual({
     );
   };
 
+  // --- VISUALIZACIÓN: Buscar gente en el salón actual ---
+  const obtenerGenteEnClase = (dia, bloque, salonActual) => {
+    if (!salonActual) return [];
+    const pool = obtenerPoolUsuarios();
+
+    // Filtramos solo por SALÓN, HORA y DÍA (Ignoramos nombre materia)
+    return pool.filter((u) =>
+      u.materias?.some(
+        (m) =>
+          m.dia === dia &&
+          m.rango === bloque &&
+          m.salon.trim().toLowerCase() === salonActual.trim().toLowerCase(),
+      ),
+    );
+  };
+
   const validarYGuardar = () => {
     if (!nombre.trim()) return alert("Escribe el nombre del perfil");
     if (materias.length === 0) return alert("Agrega al menos una materia");
@@ -118,7 +215,6 @@ export default function EditorHorarioManual({
         alert(`Faltan datos en la materia: ${m.nombre || "Sin nombre"}`);
         return;
       }
-
       const [inicio, fin] = m.bloque.split("-").map((hora) => hora.trim());
 
       for (const dia of m.dias) {
@@ -132,7 +228,7 @@ export default function EditorHorarioManual({
         materiasFinales.push({
           nombre: m.nombre.trim(),
           salon: m.salon.trim() || "S/N",
-          profesor: m.profesor.trim() || "", // Guardamos el profesor
+          profesor: m.profesor.trim() || "",
           dia,
           rango: m.bloque,
           inicio,
@@ -140,7 +236,6 @@ export default function EditorHorarioManual({
         });
       }
     }
-
     onSave({ nombreUsuario: nombre, materias: materiasFinales });
   };
 
@@ -191,18 +286,22 @@ export default function EditorHorarioManual({
                   className="bg-transparent text-[10px] font-bold text-white outline-none w-full"
                 />
               </div>
+
+              {/* INPUT SALON: DETECCIÓN AL SALIR (ONBLUR) */}
               <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
                 <MapPin size={12} className="text-tec-blue" />
                 <input
                   placeholder="Salón..."
                   value={m.salon}
+                  onFocus={(e) => setSalonTemp(e.target.value)} // Guardar valor viejo
+                  onBlur={() => verificarImpactoSocial(m.id)} // Checar cambios al salir
                   onChange={(e) =>
                     actualizarMateria(m.id, "salon", e.target.value)
                   }
                   className="bg-transparent text-[10px] font-bold text-white outline-none w-full"
                 />
               </div>
-              {/* NUEVO INPUT: PROFESOR */}
+
               <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
                 <User size={12} className="text-tec-blue" />
                 <input
@@ -216,7 +315,50 @@ export default function EditorHorarioManual({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 bg-tec-blue/10 p-2 rounded-xl border border-tec-blue/20">
+            {/* VISUALIZACIÓN DE GENTE (BUBBLES) */}
+            <div className="flex flex-wrap gap-2 px-1 mt-1">
+              {m.dias.map((dia) => {
+                const genteAhi = obtenerGenteEnClase(dia, m.bloque, m.salon);
+                if (genteAhi.length === 0) return null;
+
+                return (
+                  <div
+                    key={dia}
+                    className="flex items-center gap-1 bg-tec-blue/10 px-2 py-1 rounded-lg border border-tec-blue/20"
+                  >
+                    <span className="text-[8px] font-bold text-tec-blue uppercase">
+                      {dia.slice(0, 3)}:
+                    </span>
+                    <div className="flex -space-x-1.5">
+                      {genteAhi.map((u) => (
+                        <div
+                          key={u.id}
+                          onClick={() =>
+                            alert(
+                              `${u.esYo ? "TÚ" : u.nombreUsuario} está en el salón ${m.salon}`,
+                            )
+                          }
+                          className="group relative cursor-pointer"
+                        >
+                          <div className="w-4 h-4 rounded-full bg-tec-blue flex items-center justify-center text-[8px] text-white font-bold border border-black relative z-10 hover:z-20 hover:scale-110 transition-all shadow-md">
+                            {u.esYo ? "YO" : u.nombreUsuario[0]}
+                          </div>
+
+                          {/* TOOLTIP DESKTOP (Hover) */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[10px] font-bold rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30">
+                            {u.esYo ? "TÚ" : u.nombreUsuario}
+                            {/* Flechita del tooltip */}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 bg-tec-blue/10 p-2 rounded-xl border border-tec-blue/20 mt-2">
               <Clock size={12} className="text-tec-blue" />
               <select
                 value={m.bloque}

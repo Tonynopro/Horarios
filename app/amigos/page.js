@@ -505,6 +505,9 @@ export default function AmigosPage() {
               key={editandoAmigo?.id || "nuevo"}
               nombreInicial={nombre}
               materiasIniciales={editandoAmigo?.materias || []}
+              idUsuarioEditando={editandoAmigo?.id} // ID de quien editamos
+              amigosContexto={amigos} // Lista de amigos
+              miHorario={miHorario} // Tu horario (para que te actualice a ti también)
               onCancel={() => {
                 setShowManual(false);
                 setEditandoAmigo(null);

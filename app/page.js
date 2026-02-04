@@ -340,7 +340,8 @@ export default function HomePage() {
       : todosLosAmigos?.find((a) => a.id === viewId);
 
   return (
-    <div className="space-y-6 pb-24 animate-in fade-in max-w-6xl mx-auto px-2 pt-6">
+    /* SE HA AUMENTADO EL MARGEN A pb-44 PARA MÁXIMA COMPATIBILIDAD CON NAVBARS MÓVILES */
+    <div className="space-y-6 pb-48 animate-in fade-in max-w-6xl mx-auto px-2 pt-6">
       <header className="flex flex-col gap-4">
         <div className="flex justify-between items-end">
           <div>

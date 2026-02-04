@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, Suspense } from "react"; // 1. Añadimos Suspense a los imports
+import { useState, useEffect, useRef, Suspense } from "react";
 import { db } from "@/lib/db";
 import { transformarCSV } from "@/lib/parser";
 import EditorHorarioManual from "@/components/EditorHorarioManual";
@@ -25,7 +25,6 @@ import {
 import { useLiveQuery } from "dexie-react-hooks";
 import { useSearchParams } from "next/navigation";
 
-// 2. Extraemos el contenido original a un componente interno
 function ConfigContent() {
   const searchParams = useSearchParams();
   const isFdoSuccess = searchParams.get("status") === "fdo_success";
@@ -49,6 +48,7 @@ function ConfigContent() {
   );
   const todosLosHorariosRaw = useLiveQuery(() => db.horarios.toArray());
 
+  // Filtramos para obtener solo a los amigos (los que NO son principales)
   const misAmigos = (todosLosHorariosRaw || []).filter(
     (h) => h.esPrincipal === "false",
   );
@@ -203,11 +203,12 @@ function ConfigContent() {
 
   const guardarDesdeEditor = async (data) => {
     try {
+      // Borramos el anterior y creamos uno nuevo para asegurar limpieza
       await db.horarios.where({ esPrincipal: "true" }).delete();
       await db.horarios.add({
         ...data,
         esPrincipal: "true",
-        id: `me_${Date.now()}`,
+        id: miHorarioActual?.id || `me_${Date.now()}`, // Intentamos mantener el ID si existe
       });
       const currentFormat = perfilActual?.formatoHora || 24;
       await db.perfil.clear();
@@ -239,6 +240,12 @@ function ConfigContent() {
               key={miHorarioActual?.id || "nuevo_propio"}
               nombreInicial={perfilActual?.nombre || ""}
               materiasIniciales={miHorarioActual?.materias || []}
+              // 👇 AQUÍ ESTÁN LOS CAMBIOS IMPORTANTES 👇
+              amigosContexto={misAmigos} // Pasamos tus amigos para ver coincidencias
+              miHorario={miHorarioActual} // Te pasamos a ti mismo
+              idUsuarioEditando={miHorarioActual?.id} // Avisamos que te estás editando a ti
+              // 👆 --------------------------------- 👆
+
               onCancel={() => setShowManual(false)}
               onSave={guardarDesdeEditor}
             />
@@ -584,7 +591,6 @@ function ConfigContent() {
   );
 }
 
-// 3. El componente que exportamos envuelve todo en Suspense
 export default function ConfigPage() {
   return (
     <Suspense
