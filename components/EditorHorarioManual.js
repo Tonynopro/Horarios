@@ -10,6 +10,7 @@ import {
   BookOpen,
   MapPin,
   User,
+  Copy, // <--- IMPORTAMOS EL ICONO DE COPIAR
 } from "lucide-react";
 
 export default function EditorHorarioManual({
@@ -17,12 +18,14 @@ export default function EditorHorarioManual({
   onCancel,
   nombreInicial = "",
   materiasIniciales = [],
-  idUsuarioEditando = null, // <--- ID de a quién estamos editando (para no auto-actualizarlo doble)
-  amigosContexto = [], // <--- Lista de amigos
-  miHorario = null, // <--- Tu propio horario para que te actualice a ti también
+  idUsuarioEditando = null,
+  amigosContexto = [],
+  miHorario = null,
 }) {
   const [nombre, setNombre] = useState(nombreInicial);
+
   const [salonTemp, setSalonTemp] = useState("");
+  const [bloqueTemp, setBloqueTemp] = useState("");
 
   const [materias, setMaterias] = useState(() => {
     if (!materiasIniciales || materiasIniciales.length === 0) return [];
@@ -71,86 +74,255 @@ export default function EditorHorarioManual({
   ];
   const diasSemana = ["lunes", "martes", "miercoles", "jueves", "viernes"];
 
-  // --- HELPER: Obtener UNIVERSO de gente (Amigos + Yo) ---
   const obtenerPoolUsuarios = () => {
     const pool = [...amigosContexto];
-    // Si yo existo y NO soy la persona que se está editando ahorita, agrégame al pool
     if (miHorario && miHorario.id !== idUsuarioEditando) {
-      pool.push({ ...miHorario, esYo: true }); // Marcamos que soy yo para feedback visual
+      pool.push({ ...miHorario, esYo: true });
     }
-    // Filtramos para NO incluir a la persona que ya estamos editando en el formulario
     return pool.filter((u) => u.id !== idUsuarioEditando);
   };
 
-  // --- LÓGICA DE ACTUALIZACIÓN MASIVA (SOLO POR SALÓN) ---
-  const verificarImpactoSocial = async (idMateriaEditada) => {
-    const materiaActual = materias.find((m) => m.id === idMateriaEditada);
-    if (!materiaActual) return;
-
-    const nuevoSalon = materiaActual.salon.trim();
-    const viejoSalon = salonTemp.trim(); // El que guardamos en onFocus
-
-    // Validaciones
-    if (!nuevoSalon || !viejoSalon || nuevoSalon === viejoSalon) return;
+  // =====================================================================
+  // 🆕 FUNCIÓN DE DUPLICAR (COPIAR CLASE)
+  // =====================================================================
+  const manejarDuplicacion = async (idMateria) => {
+    const materiaOriginal = materias.find((m) => m.id === idMateria);
+    if (!materiaOriginal) return;
 
     const pool = obtenerPoolUsuarios();
-    if (pool.length === 0) return;
 
-    // BUSCAMOS AFECTADOS
-    // Criterio estricto: Coincidir en SALÓN VIEJO + DÍA + HORA.
-    // (Ignoramos el nombre de la materia a propósito)
-    const afectados = [];
-
-    pool.forEach((usuario) => {
-      // Revisamos si el usuario tiene ALGUNA clase en ese salón, día y hora
-      const tieneClaseAhi = usuario.materias?.some(
-        (m) =>
-          m.salon.trim().toLowerCase() === viejoSalon.toLowerCase() && // Mismo salón viejo
-          m.rango === materiaActual.bloque && // Misma hora
-          materiaActual.dias.includes(m.dia), // Mismo día
-      );
-
-      if (tieneClaseAhi) {
-        afectados.push(usuario);
-      }
-    });
-
-    if (afectados.length === 0) return;
-
-    // PREGUNTAR AL USUARIO
-    const nombres = afectados
-      .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
-      .join(", ");
-    const confirmar = window.confirm(
-      `CAMBIO DE SALÓN DETECTADO\n\n` +
-        `Las siguientes personas también tienen clase en el salón "${viejoSalon}" a esta hora:\n` +
-        `-> ${nombres}\n\n` +
-        `¿Quieres moverlos al nuevo salón "${nuevoSalon}" también?`,
+    // Buscamos amigos que tengan EXACTAMENTE esta misma clase (para duplicárselas a ellos también)
+    const afectados = pool.filter((u) =>
+      u.materias?.some(
+        (mat) =>
+          mat.salon.toLowerCase() === materiaOriginal.salon.toLowerCase() &&
+          mat.rango === materiaOriginal.bloque &&
+          materiaOriginal.dias.includes(mat.dia),
+      ),
     );
 
-    // EJECUTAR CAMBIOS EN DB
-    if (confirmar) {
-      let actualizados = 0;
-      for (const usuario of afectados) {
-        const nuevasMaterias = usuario.materias.map((m) => {
-          // Si coincide con las condiciones (Salón viejo + hora + dia), actualizamos
-          if (
-            m.salon.trim().toLowerCase() === viejoSalon.toLowerCase() &&
-            m.rango === materiaActual.bloque &&
-            materiaActual.dias.includes(m.dia)
-          ) {
-            return { ...m, salon: nuevoSalon };
-          }
-          return m;
-        });
-
-        await db.horarios.update(usuario.id, { materias: nuevasMaterias });
-        actualizados++;
-      }
-      alert(`Se actualizó el horario de ${actualizados} persona(s).`);
+    let duplicarAmigos = false;
+    if (afectados.length > 0) {
+      const nombres = afectados
+        .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+        .join(", ");
+      duplicarAmigos = confirm(
+        `📢 DUPLICAR CLASE\n\n` +
+          `Vas a crear una copia de "${materiaOriginal.nombre}".\n` +
+          `${nombres} también tienen esta clase.\n\n` +
+          `¿Quieres crearles una copia a ellos también? (Útil para dividir horarios)`,
+      );
     }
 
+    if (duplicarAmigos) {
+      let count = 0;
+      for (const u of afectados) {
+        // Encontramos las materias originales del amigo para clonarlas
+        // OJO: Un amigo podría tener esta clase desglosada en varios objetos en su DB,
+        // así que buscamos las coincidencias y las duplicamos.
+        const nuevasMaterias = [...u.materias];
+
+        // Buscamos las entradas que coinciden con la materia que estamos copiando
+        const coincidencias = u.materias.filter(
+          (mat) =>
+            mat.salon.toLowerCase() === materiaOriginal.salon.toLowerCase() &&
+            mat.rango === materiaOriginal.bloque &&
+            materiaOriginal.dias.includes(mat.dia),
+        );
+
+        // Las pusheamos de nuevo (duplicar)
+        coincidencias.forEach((c) => {
+          nuevasMaterias.push({ ...c }); // Copia exacta
+        });
+
+        await db.horarios.update(u.id, { materias: nuevasMaterias });
+        count++;
+      }
+      alert(`✅ Se duplicó la clase para ${count} persona(s).`);
+    }
+
+    // Duplicar LOCALMENTE
+    const copia = {
+      ...materiaOriginal,
+      id: Date.now(), // Nuevo ID para que sea independiente
+    };
+    // La insertamos justo después de la original para que se vea ordenado
+    const indice = materias.findIndex((m) => m.id === idMateria);
+    const nuevasMateriasLocal = [...materias];
+    nuevasMateriasLocal.splice(indice + 1, 0, copia);
+
+    setMaterias(nuevasMateriasLocal);
+  };
+
+  // --- RESTO DE FUNCIONES (IGUAL QUE ANTES) ---
+
+  const verificarCambioSalon = async (idMateria, nuevoSalon) => {
+    const m = materias.find((mat) => mat.id === idMateria);
+    if (!m || !salonTemp || salonTemp === nuevoSalon) return;
+    const viejoSalon = salonTemp.trim();
+    const pool = obtenerPoolUsuarios();
+    const afectados = pool.filter((u) =>
+      u.materias?.some(
+        (mat) =>
+          mat.salon.toLowerCase() === viejoSalon.toLowerCase() &&
+          mat.rango === m.bloque &&
+          m.dias.includes(mat.dia),
+      ),
+    );
+    if (afectados.length > 0) {
+      const nombres = afectados
+        .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+        .join(", ");
+      if (
+        confirm(
+          `📢 CAMBIO DE SALÓN\n\n${nombres} están en el salón anterior (${viejoSalon}).\n¿Moverlos al nuevo salón (${nuevoSalon}) también?`,
+        )
+      ) {
+        for (const u of afectados) {
+          const nuevas = u.materias.map((mat) => {
+            if (
+              mat.salon.toLowerCase() === viejoSalon.toLowerCase() &&
+              mat.rango === m.bloque &&
+              m.dias.includes(mat.dia)
+            ) {
+              return { ...mat, salon: nuevoSalon };
+            }
+            return mat;
+          });
+          await db.horarios.update(u.id, { materias: nuevas });
+        }
+        alert("✅ Amigos movidos al nuevo salón.");
+      }
+    }
     setSalonTemp("");
+  };
+
+  const verificarCambioHora = async (idMateria, nuevaHora) => {
+    const m = materias.find((mat) => mat.id === idMateria);
+    if (!m || !bloqueTemp || bloqueTemp === nuevaHora) return;
+    const viejaHora = bloqueTemp;
+    const pool = obtenerPoolUsuarios();
+    const afectados = pool.filter((u) =>
+      u.materias?.some(
+        (mat) =>
+          mat.salon.toLowerCase() === m.salon.toLowerCase() &&
+          mat.rango === viejaHora &&
+          m.dias.includes(mat.dia),
+      ),
+    );
+    if (afectados.length > 0) {
+      const nombres = afectados
+        .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+        .join(", ");
+      if (
+        confirm(
+          `📢 CAMBIO DE HORA\n\n${nombres} tienen esta clase a las ${viejaHora}.\n¿Moverlos a la nueva hora (${nuevaHora}) también?`,
+        )
+      ) {
+        for (const u of afectados) {
+          const nuevas = u.materias.map((mat) => {
+            if (
+              mat.salon.toLowerCase() === m.salon.toLowerCase() &&
+              mat.rango === viejaHora &&
+              m.dias.includes(mat.dia)
+            ) {
+              return { ...mat, rango: nuevaHora };
+            }
+            return mat;
+          });
+          await db.horarios.update(u.id, { materias: nuevas });
+        }
+        alert("✅ Amigos movidos de hora.");
+      }
+    }
+    setBloqueTemp("");
+  };
+
+  const manejarToggleDia = async (mId, dia) => {
+    const materia = materias.find((m) => m.id === mId);
+    if (materia.dias.includes(dia)) {
+      const pool = obtenerPoolUsuarios();
+      const afectados = pool.filter((u) =>
+        u.materias?.some(
+          (mat) =>
+            mat.dia === dia &&
+            mat.rango === materia.bloque &&
+            mat.salon.toLowerCase() === materia.salon.toLowerCase(),
+        ),
+      );
+      if (afectados.length > 0) {
+        const nombres = afectados
+          .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+          .join(", ");
+        if (
+          confirm(
+            `📢 QUITAR DÍA\n\nVas a dejar de ir el ${dia.toUpperCase()}.\n${nombres} también van ese día.\n\n¿Quitarles el ${dia} a ellos también?`,
+          )
+        ) {
+          for (const u of afectados) {
+            const nuevas = u.materias.filter(
+              (mat) =>
+                !(
+                  mat.dia === dia &&
+                  mat.rango === materia.bloque &&
+                  mat.salon.toLowerCase() === materia.salon.toLowerCase()
+                ),
+            );
+            await db.horarios.update(u.id, { materias: nuevas });
+          }
+          alert(`✅ Se eliminó el ${dia} para tus amigos.`);
+        }
+      }
+    }
+    setMaterias(
+      materias.map((m) => {
+        if (m.id === mId) {
+          const nuevosDias = m.dias.includes(dia)
+            ? m.dias.filter((d) => d !== dia)
+            : [...m.dias, dia];
+          return { ...m, dias: nuevosDias };
+        }
+        return m;
+      }),
+    );
+  };
+
+  const manejarEliminacionTotal = async (idMateria) => {
+    const materia = materias.find((m) => m.id === idMateria);
+    if (!materia) return;
+    const pool = obtenerPoolUsuarios();
+    const afectados = pool.filter((u) =>
+      u.materias?.some(
+        (mat) =>
+          mat.salon.toLowerCase() === materia.salon.toLowerCase() &&
+          mat.rango === materia.bloque &&
+          materia.dias.includes(mat.dia),
+      ),
+    );
+    let borrarAmigos = false;
+    if (afectados.length > 0) {
+      const nombres = afectados
+        .map((a) => (a.esYo ? "TÚ" : a.nombreUsuario))
+        .join(", ");
+      borrarAmigos = confirm(
+        `📢 BORRAR MATERIA\n\nEstás borrando esta clase por completo.\n${nombres} también la tienen.\n\n¿Borrársela a ellos también?`,
+      );
+    }
+    if (borrarAmigos) {
+      for (const u of afectados) {
+        const nuevas = u.materias.filter(
+          (mat) =>
+            !(
+              mat.salon.toLowerCase() === materia.salon.toLowerCase() &&
+              mat.rango === materia.bloque &&
+              materia.dias.includes(mat.dia)
+            ),
+        );
+        await db.horarios.update(u.id, { materias: nuevas });
+      }
+      alert("✅ Materia eliminada de todos los amigos afectados.");
+    }
+    setMaterias(materias.filter((x) => x.id !== idMateria));
   };
 
   const agregarMateria = () => {
@@ -174,25 +346,13 @@ export default function EditorHorarioManual({
   };
 
   const toggleDia = (mId, dia) => {
-    setMaterias(
-      materias.map((m) => {
-        if (m.id === mId) {
-          const nuevosDias = m.dias.includes(dia)
-            ? m.dias.filter((d) => d !== dia)
-            : [...m.dias, dia];
-          return { ...m, dias: nuevosDias };
-        }
-        return m;
-      }),
-    );
+    // Redirigimos al manejador inteligente
+    manejarToggleDia(mId, dia);
   };
 
-  // --- VISUALIZACIÓN: Buscar gente en el salón actual ---
   const obtenerGenteEnClase = (dia, bloque, salonActual) => {
     if (!salonActual) return [];
     const pool = obtenerPoolUsuarios();
-
-    // Filtramos solo por SALÓN, HORA y DÍA (Ignoramos nombre materia)
     return pool.filter((u) =>
       u.materias?.some(
         (m) =>
@@ -206,17 +366,14 @@ export default function EditorHorarioManual({
   const validarYGuardar = () => {
     if (!nombre.trim()) return alert("Escribe el nombre del perfil");
     if (materias.length === 0) return alert("Agrega al menos una materia");
-
     const materiasFinales = [];
     const ocupados = new Set();
-
     for (const m of materias) {
       if (!m.nombre.trim() || m.dias.length === 0) {
         alert(`Faltan datos en la materia: ${m.nombre || "Sin nombre"}`);
         return;
       }
       const [inicio, fin] = m.bloque.split("-").map((hora) => hora.trim());
-
       for (const dia of m.dias) {
         const key = `${m.bloque.replace(/\s/g, "")}-${dia}`;
         if (ocupados.has(key)) {
@@ -224,7 +381,6 @@ export default function EditorHorarioManual({
           return;
         }
         ocupados.add(key);
-
         materiasFinales.push({
           nombre: m.nombre.trim(),
           salon: m.salon.trim() || "S/N",
@@ -267,12 +423,26 @@ export default function EditorHorarioManual({
             key={m.id}
             className="bg-white/[0.03] border border-white/5 p-4 rounded-3xl space-y-4 relative animate-in slide-in-from-top-2"
           >
-            <button
-              onClick={() => setMaterias(materias.filter((x) => x.id !== m.id))}
-              className="absolute top-3 right-3 text-gray-600 hover:text-red-500 transition-colors"
-            >
-              <Trash2 size={14} />
-            </button>
+            {/* --- CONTROLES SUPERIORES (BORRAR Y COPIAR) --- */}
+            <div className="absolute top-3 right-3 flex gap-2">
+              {/* BOTÓN COPIAR */}
+              <button
+                onClick={() => manejarDuplicacion(m.id)}
+                className="text-gray-600 hover:text-tec-blue transition-colors"
+                title="Duplicar materia (Dividir horario)"
+              >
+                <Copy size={14} />
+              </button>
+
+              {/* BOTÓN BORRAR */}
+              <button
+                onClick={() => manejarEliminacionTotal(m.id)}
+                className="text-gray-600 hover:text-red-500 transition-colors"
+                title="Borrar materia"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
@@ -287,14 +457,13 @@ export default function EditorHorarioManual({
                 />
               </div>
 
-              {/* INPUT SALON: DETECCIÓN AL SALIR (ONBLUR) */}
               <div className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-xl border border-white/5">
                 <MapPin size={12} className="text-tec-blue" />
                 <input
                   placeholder="Salón..."
                   value={m.salon}
-                  onFocus={(e) => setSalonTemp(e.target.value)} // Guardar valor viejo
-                  onBlur={() => verificarImpactoSocial(m.id)} // Checar cambios al salir
+                  onFocus={(e) => setSalonTemp(e.target.value)}
+                  onBlur={(e) => verificarCambioSalon(m.id, e.target.value)}
                   onChange={(e) =>
                     actualizarMateria(m.id, "salon", e.target.value)
                   }
@@ -315,7 +484,7 @@ export default function EditorHorarioManual({
               </div>
             </div>
 
-            {/* VISUALIZACIÓN DE GENTE (BUBBLES) */}
+            {/* VISUALIZACIÓN DE GENTE */}
             <div className="flex flex-wrap gap-2 px-1 mt-1">
               {m.dias.map((dia) => {
                 const genteAhi = obtenerGenteEnClase(dia, m.bloque, m.salon);
@@ -343,11 +512,8 @@ export default function EditorHorarioManual({
                           <div className="w-4 h-4 rounded-full bg-tec-blue flex items-center justify-center text-[8px] text-white font-bold border border-black relative z-10 hover:z-20 hover:scale-110 transition-all shadow-md">
                             {u.esYo ? "YO" : u.nombreUsuario[0]}
                           </div>
-
-                          {/* TOOLTIP DESKTOP (Hover) */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[10px] font-bold rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30">
                             {u.esYo ? "TÚ" : u.nombreUsuario}
-                            {/* Flechita del tooltip */}
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-black"></div>
                           </div>
                         </div>
@@ -362,9 +528,12 @@ export default function EditorHorarioManual({
               <Clock size={12} className="text-tec-blue" />
               <select
                 value={m.bloque}
-                onChange={(e) =>
-                  actualizarMateria(m.id, "bloque", e.target.value)
-                }
+                onFocus={() => setBloqueTemp(m.bloque)}
+                onChange={(e) => {
+                  const nuevaHora = e.target.value;
+                  verificarCambioHora(m.id, nuevaHora);
+                  actualizarMateria(m.id, "bloque", nuevaHora);
+                }}
                 className="bg-transparent text-[10px] font-black uppercase text-gray-300 outline-none w-full cursor-pointer"
               >
                 {bloquesTec.map((b) => (
